@@ -19,7 +19,13 @@ func runGitDiff() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return string(output), nil
+
+	diff := string(output)
+	if strings.TrimSpace(diff) == "" {
+		return "", fmt.Errorf("nenhuma alteração encontrada no stage. Execute 'git add <arquivo>' para adicionar arquivos ao stage antes de gerar o commit")
+	}
+
+	return diff, nil
 }
 
 func askForConfirmation(message string) bool {
