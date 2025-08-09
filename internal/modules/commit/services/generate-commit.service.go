@@ -7,20 +7,12 @@ import (
 )
 
 func runGitDiff() (string, error) {
-	cmd := exec.Command("git", "diff", "--cached")
+	cmd := exec.Command("git", "diff", "--staged")
+
 	output, err := cmd.Output()
 	if err != nil {
 		return "", err
 	}
-	
-	if len(output) == 0 {
-		cmd = exec.Command("git", "diff")
-		output, err = cmd.Output()
-		if err != nil {
-			return "", err
-		}
-	}
-	
 	return string(output), nil
 }
 
@@ -41,13 +33,6 @@ func GenerateCommit() {
 		os.Exit(1)
 	}
 
-	if diff == "" {
-		fmt.Println("No changes detected. Make sure you have staged changes or unstaged modifications.")
-		return
-	}
-
-	fmt.Println("Git diff output:", diff)
-	
 	commitMessage := "chore: update dependencies"
 	err = runGitCommit(commitMessage)
 	if err != nil {
@@ -55,5 +40,6 @@ func GenerateCommit() {
 		os.Exit(1)
 	}
 
+	fmt.Println("Git diff output:", diff)
 	fmt.Println("Git commit message:", commitMessage)
 }
