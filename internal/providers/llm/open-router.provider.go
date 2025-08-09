@@ -3,6 +3,7 @@ package providers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -23,11 +24,11 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 	godotenv.Load()
 
 	reqBody := map[string]interface{}{
-		"model": "openai/gpt-3.5-turbo",
+		"model": "openai/gpt-oss-20b:free",
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "You are a commit message generator. Analyze the git diff and generate ONLY a commit message following conventional commits format. Rules: 1) Return ONLY the commit message, no explanations or extra text. 2) Format: type(scope): description\n\ndetailed changes. 3) Use types: feat, fix, docs, style, refactor, test, chore. 4) Keep title under 50 chars. 5) Add details about what was changed. 6) No markdown, quotes, or special characters. 7) Use present tense.",
+				"content": "You are a commit message generator following Conventional Commits specification. Analyze the git diff and generate ONLY a commit message. STRICT FORMAT: type(scope): description\n\n- List of changes in bullet points\n- Each bullet explains what was added/changed/fixed\n- Use past tense for changes (Added, Enhanced, Fixed, etc.)\n\nChanged files:\n- path/to/file1\n- path/to/file2\n\nRULES: 1) Types: feat, fix, docs, style, refactor, test, chore, ci, perf, build 2) Scope: use module/component name 3) Description: present tense, lowercase, no period, max 50 chars 4) Body: bullet points with past tense verbs (Added, Enhanced, Fixed, Updated, Implemented) 5) Always include 'Changed files:' section with file paths 6) Return ONLY the commit message, no explanations",
 			},
 			{
 				"role":    "user",
@@ -71,6 +72,8 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 	if err != nil {
 		return types.NewError[llm_type.LlmResponseEntity](err)
 	}
+
+	fmt.Println(respBodyJson)
 
 	message := respBodyJson["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"].(string)
 	response := llm_type.LlmResponseEntity{
