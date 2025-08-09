@@ -6,10 +6,18 @@ import (
 	"os"
 
 	commit "github.com/PedroHercules/gommit/internal/modules/commit/services"
+	llm_provider "github.com/PedroHercules/gommit/internal/providers/llm"
 )
 
 func runCommit() error {
-	commit.GenerateCommit()
+	openRouterProvider := llm_provider.NewOpenRouterProvider()
+	commitResponse := commit.GenerateCommit(openRouterProvider)
+	if commitResponse.IsFailure() {
+		fmt.Println(commitResponse.GetError())
+	}
+
+	fmt.Println(commitResponse.GetData().Message)
+
 	return nil
 }
 
