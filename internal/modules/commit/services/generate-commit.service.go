@@ -70,6 +70,7 @@ func GenerateCommit(llmProvider *llm_provider.OpenRouterProvider) *types.ResultE
 		return types.NewError[llm_type.LlmResponseEntity](err)
 	}
 
+	fmt.Println("🤖 Generating commit message with AI...")
 	generateCommitResponse := llmProvider.GenerateCommitMessage(diff)
 	if generateCommitResponse.IsFailure() {
 		return generateCommitResponse

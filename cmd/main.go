@@ -10,6 +10,7 @@ import (
 )
 
 func runCommit() error {
+	fmt.Println("🔍 Analyzing staged changes...")
 	openRouterProvider := llm_provider.NewOpenRouterProvider()
 	commitResponse := commit.GenerateCommit(openRouterProvider)
 	if commitResponse.IsFailure() {
@@ -23,12 +24,13 @@ func runCommit() error {
 }
 
 func runConfigSetKey(key string) error {
+	fmt.Println("🔐 Storing API key securely...")
 	err := config.AddLlmKey(key)
 	if err != nil {
 		fmt.Printf("Error storing API key: %v\n", err)
 		return err
 	}
-	fmt.Println("API key stored securely")
+	fmt.Println("✅ API key stored securely")
 	return nil
 }
 
@@ -47,12 +49,13 @@ func runConfigGetKey() error {
 }
 
 func runConfigSetModel(model string) error {
+	fmt.Println("⚙️ Setting default model...")
 	err := config.SetDefaultModel(model)
 	if err != nil {
 		fmt.Printf("Error storing default model: %v\n", err)
 		return err
 	}
-	fmt.Printf("Default model set to: %s\n", model)
+	fmt.Printf("✅ Default model set to: %s\n", model)
 	return nil
 }
 
@@ -71,22 +74,24 @@ func runConfigGetModel() error {
 }
 
 func runConfigRemoveModel() error {
+	fmt.Println("🗑️ Removing default model...")
 	err := config.RemoveDefaultModel()
 	if err != nil {
 		fmt.Printf("Error removing default model: %v\n", err)
 		return err
 	}
-	fmt.Println("Default model removed")
+	fmt.Println("✅ Default model removed")
 	return nil
 }
 
 func runConfigRemoveKey() error {
+	fmt.Println("🗑️ Removing API key...")
 	err := config.RemoveLlmKey()
 	if err != nil {
 		fmt.Printf("Error removing API key: %v\n", err)
 		return err
 	}
-	fmt.Println("API key removed")
+	fmt.Println("✅ API key removed")
 	return nil
 }
 

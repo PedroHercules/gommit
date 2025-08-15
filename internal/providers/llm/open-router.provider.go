@@ -153,13 +153,16 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 	// Check for user-configured default model first
 	var primaryModel string
 	if defaultModel, err := config.GetDefaultModel(); err == nil && defaultModel != "" {
+		fmt.Printf("📋 Using configured model: %s\n", defaultModel)
 		primaryModel = defaultModel
 	} else {
+		fmt.Println("🔍 Selecting best available model...")
 		// Try to get best model with fallback
 		bestModel, err := p.getBestFreeModel()
 		if err != nil {
 			bestModel = "openai/gpt-oss-20b:free"
 		}
+		fmt.Printf("✅ Selected model: %s\n", bestModel)
 		primaryModel = bestModel
 	}
 
@@ -191,6 +194,7 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 }
 
 func (p *OpenRouterProvider) tryGenerateWithModel(diff string, model string) *types.ResultEntity[llm_type.LlmResponseEntity] {
+	fmt.Printf("🔄 Trying model: %s\n", model)
 	reqBody := map[string]interface{}{
 		"model": model,
 		"messages": []map[string]string{
