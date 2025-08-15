@@ -9,6 +9,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"time"
 
 	config "github.com/PedroHercules/gommit/internal/modules/config/services"
 	llm_type "github.com/PedroHercules/gommit/internal/providers/llm/types"
@@ -149,13 +150,42 @@ func (p *OpenRouterProvider) getBestFreeModel() (string, error) {
 func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEntity[llm_type.LlmResponseEntity] {
 	godotenv.Load()
 
+	// Try to get best model with fallback
 	bestModel, err := p.getBestFreeModel()
 	if err != nil {
 		bestModel = "openai/gpt-oss-20b:free"
 	}
 
+	// Fallback models in order of preference
+	fallbackModels := []string{
+		"openai/gpt-oss-20b:free",
+		"meta-llama/llama-3.2-3b-instruct:free",
+		"microsoft/phi-3-mini-128k-instruct:free",
+		"google/gemma-2-9b-it:free",
+	}
+
+	// Try primary model first, then fallbacks
+	modelsToTry := append([]string{bestModel}, fallbackModels...)
+	
+	for _, model := range modelsToTry {
+		result := p.tryGenerateWithModel(diff, model)
+		if result.IsSuccess() {
+			return result
+		}
+	}
+
+	// If all models fail, return a default commit message
+	return types.NewSuccess(llm_type.LlmResponseEntity{
+		Message:     "feat: update files\n\n- Modified files based on staged changes",
+		Model:       "fallback",
+		TokensUsed:  0,
+		ContextSize: 0,
+	})
+}
+
+func (p *OpenRouterProvider) tryGenerateWithModel(diff string, model string) *types.ResultEntity[llm_type.LlmResponseEntity] {
 	reqBody := map[string]interface{}{
-		"model": bestModel,
+		"model": model,
 		"messages": []map[string]string{
 			{
 				"role":    "system",
@@ -190,22 +220,34 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 	}
 	req.Body = io.NopCloser(bytes.NewBuffer(reqBodyJson))
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return types.NewError[llm_type.LlmResponseEntity](err)
+		return types.NewFailure[llm_type.LlmResponseEntity](fmt.Sprintf("Request failed for model %s: %v", model, err))
+	}
+	
+	// Check HTTP status code
+	if resp.StatusCode != http.StatusOK {
+		return types.NewFailure[llm_type.LlmResponseEntity](fmt.Sprintf("API returned status %d for model %s", resp.StatusCode, model))
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return types.NewError[llm_type.LlmResponseEntity](err)
+		return types.NewFailure[llm_type.LlmResponseEntity](fmt.Sprintf("Failed to read response body for model %s: %v", model, err))
 	}
 
 	var respBodyJson map[string]interface{}
 	err = json.Unmarshal(respBody, &respBodyJson)
 	if err != nil {
-		return types.NewError[llm_type.LlmResponseEntity](err)
+		return types.NewFailure[llm_type.LlmResponseEntity](fmt.Sprintf("Failed to parse JSON response for model %s: %v", model, err))
+	}
+
+	// Check for API error in response
+	if errorObj, ok := respBodyJson["error"]; ok {
+		return types.NewFailure[llm_type.LlmResponseEntity](fmt.Sprintf("API error for model %s: %v", model, errorObj))
 	}
 
 	// Extract message with safety checks
@@ -221,7 +263,7 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 	}
 	
 	if message == "" {
-		return types.NewFailure[llm_type.LlmResponseEntity]("Failed to extract message from API response")
+		return types.NewFailure[llm_type.LlmResponseEntity](fmt.Sprintf("Failed to extract message from API response for model %s", model))
 	}
 	
 	// Extract usage information
@@ -234,13 +276,13 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 	
 	// Get context size from the selected model
 	contextSize := 0
-	if selectedModel, err := p.getModelInfo(bestModel); err == nil {
+	if selectedModel, err := p.getModelInfo(model); err == nil {
 		contextSize = selectedModel.ContextLength
 	}
 	
 	response := llm_type.LlmResponseEntity{
 		Message:     message,
-		Model:       bestModel,
+		Model:       model,
 		TokensUsed:  tokensUsed,
 		ContextSize: contextSize,
 	}
