@@ -82,7 +82,7 @@ func (uc *GenerateCommitUseCase) Execute(req GenerateCommitRequest) (*GenerateCo
 	response.Diff = diff
 
 	// Step 4: Validate the diff
-	if validateErr := diff.Validate(); err != nil {
+	if validateErr := diff.Validate(); validateErr != nil {
 		return nil, validateErr
 	}
 
