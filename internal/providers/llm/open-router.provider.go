@@ -150,10 +150,17 @@ func (p *OpenRouterProvider) getBestFreeModel() (string, error) {
 func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEntity[llm_type.LlmResponseEntity] {
 	godotenv.Load()
 
-	// Try to get best model with fallback
-	bestModel, err := p.getBestFreeModel()
-	if err != nil {
-		bestModel = "openai/gpt-oss-20b:free"
+	// Check for user-configured default model first
+	var primaryModel string
+	if defaultModel, err := config.GetDefaultModel(); err == nil && defaultModel != "" {
+		primaryModel = defaultModel
+	} else {
+		// Try to get best model with fallback
+		bestModel, err := p.getBestFreeModel()
+		if err != nil {
+			bestModel = "openai/gpt-oss-20b:free"
+		}
+		primaryModel = bestModel
 	}
 
 	// Fallback models in order of preference
@@ -165,7 +172,7 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 	}
 
 	// Try primary model first, then fallbacks
-	modelsToTry := append([]string{bestModel}, fallbackModels...)
+	modelsToTry := append([]string{primaryModel}, fallbackModels...)
 	
 	for _, model := range modelsToTry {
 		result := p.tryGenerateWithModel(diff, model)

@@ -61,3 +61,17 @@ func (s *ConfigService) GetConfig() *entities.ConfigEntity {
 func (s *ConfigService) SaveConfig() error {
 	return s.config.Save()
 }
+
+func (s *ConfigService) SetDefaultModel(model string) error {
+	s.config.DefaultModel = model
+	return s.SaveConfig()
+}
+
+func (s *ConfigService) GetDefaultModel() string {
+	return s.config.DefaultModel
+}
+
+func (s *ConfigService) RemoveDefaultModel() error {
+	s.config.DefaultModel = ""
+	return s.SaveConfig()
+}

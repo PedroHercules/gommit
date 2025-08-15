@@ -8,7 +8,8 @@ import (
 )
 
 type ConfigEntity struct {
-	LlmKey string `json:"llm_key,omitempty"`
+	LlmKey       string `json:"llm_key,omitempty"`
+	DefaultModel string `json:"default_model,omitempty"`
 }
 
 func (c *ConfigEntity) GetConfigDir() (string, error) {

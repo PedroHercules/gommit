@@ -46,14 +46,51 @@ func runConfigGetKey() error {
 	return nil
 }
 
+func runConfigSetModel(model string) error {
+	err := config.SetDefaultModel(model)
+	if err != nil {
+		fmt.Printf("Error storing default model: %v\n", err)
+		return err
+	}
+	fmt.Printf("Default model set to: %s\n", model)
+	return nil
+}
+
+func runConfigGetModel() error {
+	model, err := config.GetDefaultModel()
+	if err != nil {
+		fmt.Printf("Error retrieving default model: %v\n", err)
+		return err
+	}
+	if model == "" {
+		fmt.Println("No default model configured")
+		return nil
+	}
+	fmt.Printf("Default model: %s\n", model)
+	return nil
+}
+
+func runConfigRemoveModel() error {
+	err := config.RemoveDefaultModel()
+	if err != nil {
+		fmt.Printf("Error removing default model: %v\n", err)
+		return err
+	}
+	fmt.Println("Default model removed")
+	return nil
+}
+
 func main() {
 	if len(os.Args) < 2 {
 		fmt.Println("Usage: gommit <command> [options]")
 		fmt.Println("Commands:")
-		fmt.Println("  commit                 - Generate and create commit")
-		fmt.Println("  config set-key <key>   - Store API key securely")
-		fmt.Println("  config get-key         - Retrieve stored API key")
-		fmt.Println("  pr                     - Generate PR (not implemented)")
+		fmt.Println("  commit                    - Generate and create commit")
+		fmt.Println("  config set-key <key>      - Store API key securely")
+		fmt.Println("  config get-key            - Retrieve stored API key")
+		fmt.Println("  config set-model <model>  - Set default LLM model")
+		fmt.Println("  config get-model          - Get current default model")
+		fmt.Println("  config remove-model       - Remove default model")
+		fmt.Println("  pr                        - Generate PR (not implemented)")
 		os.Exit(1)
 	}
 
@@ -67,8 +104,11 @@ func main() {
 		if len(os.Args) < 3 {
 			fmt.Println("Usage: gommit config <subcommand>")
 			fmt.Println("Subcommands:")
-			fmt.Println("  set-key <key>  - Store API key securely")
-			fmt.Println("  get-key        - Retrieve stored API key")
+			fmt.Println("  set-key <key>      - Store API key securely")
+			fmt.Println("  get-key            - Retrieve stored API key")
+			fmt.Println("  set-model <model>  - Set default LLM model")
+			fmt.Println("  get-model          - Get current default model")
+			fmt.Println("  remove-model       - Remove default model")
 			os.Exit(1)
 		}
 		subcommand := os.Args[2]
@@ -82,6 +122,18 @@ func main() {
 			runConfigSetKey(apiKey)
 		case "get-key":
 			runConfigGetKey()
+		case "set-model":
+			if len(os.Args) < 4 {
+				fmt.Println("Usage: gommit config set-model <model-id>")
+				fmt.Println("Example: gommit config set-model openai/gpt-4o-mini")
+				os.Exit(1)
+			}
+			model := os.Args[3]
+			runConfigSetModel(model)
+		case "get-model":
+			runConfigGetModel()
+		case "remove-model":
+			runConfigRemoveModel()
 		default:
 			fmt.Printf("Unknown config subcommand: %s\n", subcommand)
 			os.Exit(1)
