@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	config "github.com/PedroHercules/gommit/internal/modules/config/services"
 	llm_type "github.com/PedroHercules/gommit/internal/providers/llm/types"
 	"github.com/PedroHercules/gommit/internal/types"
 	"github.com/joho/godotenv"
@@ -44,7 +45,11 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 
 	apiKey := os.Getenv("OPENROUTER_API_KEY")
 	if apiKey == "" {
-		return types.NewFailure[llm_type.LlmResponseEntity]("OPENROUTER_API_KEY environment variable not set")
+		keyFromKeyring, keyErr := config.GetLlmKey()
+		if keyErr != nil || keyFromKeyring == "" {
+			return types.NewFailure[llm_type.LlmResponseEntity]("API key not found. Set OPENROUTER_API_KEY environment variable or use 'gommit config set-key <your-api-key>' to store it securely")
+		}
+		apiKey = keyFromKeyring
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
 	req.Header.Set("Content-Type", "application/json")
