@@ -80,23 +80,101 @@ func runConfigRemoveModel() error {
 	return nil
 }
 
+func runConfigRemoveKey() error {
+	err := config.RemoveLlmKey()
+	if err != nil {
+		fmt.Printf("Error removing API key: %v\n", err)
+		return err
+	}
+	fmt.Println("API key removed")
+	return nil
+}
+
+func runHelp() {
+	fmt.Println("🚀 Gommit - AI-powered Git commit message generator")
+	fmt.Println("")
+	fmt.Println("USAGE:")
+	fmt.Println("  gommit <command> [options]")
+	fmt.Println("")
+	fmt.Println("COMMANDS:")
+	fmt.Println("")
+	fmt.Println("  commit                     Generate and create commit message")
+	fmt.Println("                             Analyzes staged changes and creates a conventional commit")
+	fmt.Println("")
+	fmt.Println("  help, --help, -h           Show this help message")
+	fmt.Println("")
+	fmt.Println("CONFIGURATION:")
+	fmt.Println("")
+	fmt.Println("  config set-key <key>       Store OpenRouter API key securely")
+	fmt.Println("                             Required for AI-powered commit generation")
+	fmt.Println("                             Get your key at: https://openrouter.ai/keys")
+	fmt.Println("")
+	fmt.Println("  config get-key             Display currently stored API key")
+	fmt.Println("                             Shows the API key (masked for security)")
+	fmt.Println("")
+	fmt.Println("  config remove-key          Remove stored API key")
+	fmt.Println("                             Clears the API key from secure storage")
+	fmt.Println("")
+	fmt.Println("MODEL MANAGEMENT:")
+	fmt.Println("")
+	fmt.Println("  config set-model <model>   Set preferred LLM model")
+	fmt.Println("                             When set, gommit will always use this model")
+	fmt.Println("                             Disables automatic model selection")
+	fmt.Println("                             Example: openai/gpt-4o-mini")
+	fmt.Println("")
+	fmt.Println("  config get-model           Show currently configured default model")
+	fmt.Println("                             Displays the model ID if one is set")
+	fmt.Println("")
+	fmt.Println("  config remove-model        Remove default model configuration")
+	fmt.Println("                             Returns to automatic model selection")
+	fmt.Println("                             Gommit will choose the best available free model")
+	fmt.Println("")
+	fmt.Println("MODEL SELECTION BEHAVIOR:")
+	fmt.Println("")
+	fmt.Println("  • AUTOMATIC MODE (default): Gommit automatically selects the best")
+	fmt.Println("    available free model based on context length and capabilities")
+	fmt.Println("")
+	fmt.Println("  • MANUAL MODE: When you set a default model, gommit will always")
+	fmt.Println("    try to use that specific model first, with fallback to other models")
+	fmt.Println("")
+	fmt.Println("EXAMPLES:")
+	fmt.Println("")
+	fmt.Println("  # First time setup")
+	fmt.Println("  gommit config set-key sk-or-v1-...")
+	fmt.Println("")
+	fmt.Println("  # Generate commit (automatic model selection)")
+	fmt.Println("  git add .")
+	fmt.Println("  gommit commit")
+	fmt.Println("")
+	fmt.Println("  # Set preferred model")
+	fmt.Println("  gommit config set-model openai/gpt-4o-mini")
+	fmt.Println("")
+	fmt.Println("  # Return to automatic selection")
+	fmt.Println("  gommit config remove-model")
+	fmt.Println("")
+	fmt.Println("SUPPORTED MODELS:")
+	fmt.Println("")
+	fmt.Println("  • openai/gpt-4o-mini (recommended)")
+	fmt.Println("  • openai/gpt-3.5-turbo")
+	fmt.Println("  • anthropic/claude-3-haiku")
+	fmt.Println("  • meta-llama/llama-3.1-8b-instruct:free")
+	fmt.Println("  • google/gemma-7b-it:free")
+	fmt.Println("  • And many more at: https://openrouter.ai/models")
+	fmt.Println("")
+	fmt.Println("For more information, visit: https://github.com/PedroHercules/gommit")
+}
+
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Println("Usage: gommit <command> [options]")
-		fmt.Println("Commands:")
-		fmt.Println("  commit                    - Generate and create commit")
-		fmt.Println("  config set-key <key>      - Store API key securely")
-		fmt.Println("  config get-key            - Retrieve stored API key")
-		fmt.Println("  config set-model <model>  - Set default LLM model")
-		fmt.Println("  config get-model          - Get current default model")
-		fmt.Println("  config remove-model       - Remove default model")
-		fmt.Println("  pr                        - Generate PR (not implemented)")
+		runHelp()
 		os.Exit(1)
 	}
 
 	command := os.Args[1]
 
 	switch command {
+	case "help", "--help", "-h":
+		runHelp()
 	case "commit":
 		fmt.Println("Running commit command")
 		runCommit()
@@ -106,6 +184,7 @@ func main() {
 			fmt.Println("Subcommands:")
 			fmt.Println("  set-key <key>      - Store API key securely")
 			fmt.Println("  get-key            - Retrieve stored API key")
+			fmt.Println("  remove-key         - Remove stored API key")
 			fmt.Println("  set-model <model>  - Set default LLM model")
 			fmt.Println("  get-model          - Get current default model")
 			fmt.Println("  remove-model       - Remove default model")
@@ -122,6 +201,8 @@ func main() {
 			runConfigSetKey(apiKey)
 		case "get-key":
 			runConfigGetKey()
+		case "remove-key":
+			runConfigRemoveKey()
 		case "set-model":
 			if len(os.Args) < 4 {
 				fmt.Println("Usage: gommit config set-model <model-id>")

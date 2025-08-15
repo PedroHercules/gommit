@@ -1,0 +1,50 @@
+{
+  "name": "gommit",
+  "version": "1.0.0",
+  "description": "AI-powered Git commit message generator using OpenRouter LLM models",
+  "main": "index.js",
+  "bin": {
+    "gommit": "./bin/gommit"
+  },
+  "scripts": {
+    "postinstall": "node install.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "git",
+    "commit",
+    "ai",
+    "llm",
+    "conventional-commits",
+    "openrouter",
+    "cli",
+    "automation"
+  ],
+  "author": "PedroHercules",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/PedroHercules/gommit.git"
+  },
+  "bugs": {
+    "url": "https://github.com/PedroHercules/gommit/issues"
+  },
+  "homepage": "https://github.com/PedroHercules/gommit#readme",
+  "engines": {
+    "node": ">=12.0.0"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "files": [
+    "bin/",
+    "install.js",
+    "README.md"
+  ]
+}
