@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 
 	config "github.com/PedroHercules/gommit/internal/modules/config/services"
 	llm_type "github.com/PedroHercules/gommit/internal/providers/llm/types"
@@ -16,15 +18,110 @@ import (
 type OpenRouterProvider struct {
 }
 
+type ModelPricing struct {
+	Prompt     string `json:"prompt"`
+	Completion string `json:"completion"`
+	Request    string `json:"request"`
+	Image      string `json:"image"`
+}
+
+type ModelArchitecture struct {
+	InputModalities  []string `json:"input_modalities"`
+	OutputModalities []string `json:"output_modalities"`
+	Tokenizer        string   `json:"tokenizer"`
+	InstructType     *string  `json:"instruct_type"`
+}
+
+type OpenRouterModel struct {
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Description   string            `json:"description"`
+	ContextLength int               `json:"context_length"`
+	Pricing       ModelPricing      `json:"pricing"`
+	Architecture  ModelArchitecture `json:"architecture"`
+}
+
+type ModelsResponse struct {
+	Data []OpenRouterModel `json:"data"`
+}
+
 func NewOpenRouterProvider() *OpenRouterProvider {
 	return &OpenRouterProvider{}
+}
+
+func (p *OpenRouterProvider) getBestFreeModel() (string, error) {
+	req, err := http.NewRequest("GET", "https://openrouter.ai/api/v1/models", nil)
+	if err != nil {
+		return "", err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	var modelsResp ModelsResponse
+	err = json.Unmarshal(respBody, &modelsResp)
+	if err != nil {
+		return "", err
+	}
+
+	var freeModels []OpenRouterModel
+	for _, model := range modelsResp.Data {
+		if model.Pricing.Prompt == "0" && model.Pricing.Completion == "0" {
+			freeModels = append(freeModels, model)
+		}
+	}
+
+	if len(freeModels) == 0 {
+		return "openai/gpt-oss-20b:free", nil
+	}
+
+	sort.Slice(freeModels, func(i, j int) bool {
+		modelA := freeModels[i]
+		modelB := freeModels[j]
+
+		if modelA.ContextLength != modelB.ContextLength {
+			return modelA.ContextLength > modelB.ContextLength
+		}
+
+		if strings.Contains(strings.ToLower(modelA.Name), "gpt") && !strings.Contains(strings.ToLower(modelB.Name), "gpt") {
+			return true
+		}
+		if !strings.Contains(strings.ToLower(modelA.Name), "gpt") && strings.Contains(strings.ToLower(modelB.Name), "gpt") {
+			return false
+		}
+
+		if strings.Contains(strings.ToLower(modelA.Name), "llama") && !strings.Contains(strings.ToLower(modelB.Name), "llama") {
+			return true
+		}
+		if !strings.Contains(strings.ToLower(modelA.Name), "llama") && strings.Contains(strings.ToLower(modelB.Name), "llama") {
+			return false
+		}
+
+		return modelA.Name < modelB.Name
+	})
+
+	return freeModels[0].ID, nil
 }
 
 func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEntity[llm_type.LlmResponseEntity] {
 	godotenv.Load()
 
+	bestModel, err := p.getBestFreeModel()
+	if err != nil {
+		bestModel = "openai/gpt-oss-20b:free"
+	}
+
 	reqBody := map[string]interface{}{
-		"model": "openai/gpt-oss-20b:free",
+		"model": bestModel,
 		"messages": []map[string]string{
 			{
 				"role":    "system",
