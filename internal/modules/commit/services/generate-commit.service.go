@@ -28,7 +28,13 @@ func runGitDiff() (string, error) {
 	return diff, nil
 }
 
-func askForConfirmation(message string) bool {
+func askForConfirmation(message string, model string, tokensUsed int, contextSize int) bool {
+	fmt.Println("\n=== Informações do LLM ===")
+	fmt.Printf("Modelo: %s\n", model)
+	fmt.Printf("Tokens utilizados: %d\n", tokensUsed)
+	fmt.Printf("Tamanho do contexto: %d\n", contextSize)
+	fmt.Println("=========================")
+	
 	fmt.Println("\n=== Mensagem de Commit Gerada ===")
 	fmt.Println(message)
 	fmt.Println("=================================")
@@ -41,8 +47,8 @@ func askForConfirmation(message string) bool {
 	return response == "s" || response == "sim" || response == "y" || response == "yes"
 }
 
-func runGitCommit(message string) error {
-	if !askForConfirmation(message) {
+func runGitCommit(message string, model string, tokensUsed int, contextSize int) error {
+	if !askForConfirmation(message, model, tokensUsed, contextSize) {
 		fmt.Println("\nCommit cancelado pelo usuário.")
 		return fmt.Errorf("commit cancelado pelo usuário")
 	}
@@ -69,8 +75,9 @@ func GenerateCommit(llmProvider *llm_provider.OpenRouterProvider) *types.ResultE
 		return generateCommitResponse
 	}
 
-	commitMessage := generateCommitResponse.GetData().Message
-	err = runGitCommit(commitMessage)
+	responseData := generateCommitResponse.GetData()
+	commitMessage := responseData.Message
+	err = runGitCommit(commitMessage, responseData.Model, responseData.TokensUsed, responseData.ContextSize)
 	if err != nil {
 		return types.NewError[llm_type.LlmResponseEntity](err)
 	}

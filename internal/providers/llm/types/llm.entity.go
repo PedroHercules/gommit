@@ -1,5 +1,8 @@
 package providers
 
 type LlmResponseEntity struct {
-	Message string
+	Message     string
+	Model       string
+	TokensUsed  int
+	ContextSize int
 }

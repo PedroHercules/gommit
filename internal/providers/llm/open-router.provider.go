@@ -3,6 +3,7 @@ package providers
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -47,6 +48,39 @@ type ModelsResponse struct {
 
 func NewOpenRouterProvider() *OpenRouterProvider {
 	return &OpenRouterProvider{}
+}
+
+func (p *OpenRouterProvider) getModelInfo(modelID string) (*OpenRouterModel, error) {
+	req, err := http.NewRequest("GET", "https://openrouter.ai/api/v1/models", nil)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var modelsResp ModelsResponse
+	err = json.Unmarshal(respBody, &modelsResp)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, model := range modelsResp.Data {
+		if model.ID == modelID {
+			return &model, nil
+		}
+	}
+
+	return nil, fmt.Errorf("model not found: %s", modelID)
 }
 
 func (p *OpenRouterProvider) getBestFreeModel() (string, error) {
@@ -174,9 +208,41 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 		return types.NewError[llm_type.LlmResponseEntity](err)
 	}
 
-	message := respBodyJson["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"].(string)
+	// Extract message with safety checks
+	var message string
+	if choices, ok := respBodyJson["choices"].([]interface{}); ok && len(choices) > 0 {
+		if choice, ok := choices[0].(map[string]interface{}); ok {
+			if messageObj, ok := choice["message"].(map[string]interface{}); ok {
+				if content, ok := messageObj["content"].(string); ok {
+					message = content
+				}
+			}
+		}
+	}
+	
+	if message == "" {
+		return types.NewFailure[llm_type.LlmResponseEntity]("Failed to extract message from API response")
+	}
+	
+	// Extract usage information
+	var tokensUsed int
+	if usage, ok := respBodyJson["usage"].(map[string]interface{}); ok {
+		if totalTokens, ok := usage["total_tokens"].(float64); ok {
+			tokensUsed = int(totalTokens)
+		}
+	}
+	
+	// Get context size from the selected model
+	contextSize := 0
+	if selectedModel, err := p.getModelInfo(bestModel); err == nil {
+		contextSize = selectedModel.ContextLength
+	}
+	
 	response := llm_type.LlmResponseEntity{
-		Message: message,
+		Message:     message,
+		Model:       bestModel,
+		TokensUsed:  tokensUsed,
+		ContextSize: contextSize,
 	}
 	return types.NewSuccess(response)
 }
