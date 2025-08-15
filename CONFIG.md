@@ -2,7 +2,7 @@
 
 ## Armazenamento Seguro de Chaves API
 
-O Gommit utiliza o keyring do sistema operacional para armazenar chaves API de forma segura e multiplataforma.
+O Gommit utiliza o keyring do sistema operacional para armazenar chaves API de forma segura e multiplataforma
 
 ### Como funciona
 
@@ -13,16 +13,19 @@ O Gommit utiliza o keyring do sistema operacional para armazenar chaves API de f
 ### Comandos de Configuração
 
 #### Armazenar uma chave API
+
 ```bash
 gommit config set-key <sua-chave-api>
 ```
 
 Exemplo:
+
 ```bash
 gommit config set-key sk-or-v1-abc123def456
 ```
 
 #### Recuperar a chave API armazenada
+
 ```bash
 gommit config get-key
 ```
