@@ -3,7 +3,6 @@ package providers
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -77,8 +76,6 @@ func (p *OpenRouterProvider) GenerateCommitMessage(diff string) *types.ResultEnt
 	if err != nil {
 		return types.NewError[llm_type.LlmResponseEntity](err)
 	}
-
-	fmt.Println(respBodyJson)
 
 	message := respBodyJson["choices"].([]interface{})[0].(map[string]interface{})["message"].(map[string]interface{})["content"].(string)
 	response := llm_type.LlmResponseEntity{
