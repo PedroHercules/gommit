@@ -87,7 +87,7 @@ cd gommit
 go mod tidy
 
 # Compile o projeto
-go build -o gommit cmd/gommit/main.go
+go build -o gommit main.go
 ```
 
 ### Configuração
@@ -146,7 +146,7 @@ go build -o gommit cmd/gommit/main.go
    - Imports bem organizados
 
 5. **Injeção de Dependências**
-   - Manual DI em `cmd/gommit/main.go`
+   - Manual DI em `main.go`
    - Inversão de controle
 
 ### 🔍 Pontos de Estudo
