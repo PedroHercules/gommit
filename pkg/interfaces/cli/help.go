@@ -20,7 +20,7 @@ COMMANDS:
 
 COMMIT OPTIONS:
     --model, -m <model>    Use specific AI model
-    --no-commit           Generate message only, don't commit
+    --commit              Generate message and commit automatically
     --dry-run            Show what would be done without committing
     --force              Force commit even with warnings
 
@@ -36,8 +36,8 @@ CONFIG COMMANDS:
     config validate          Validate current configuration
 
 EXAMPLES:
-    gommit                           # Generate and commit with AI
-    gommit --no-commit               # Generate message only
+    gommit                           # Generate message only (default)
+    gommit --commit                  # Generate message and commit
     gommit --model claude-3-sonnet   # Use specific model
     gommit config set-key sk-xxx     # Set API key
     gommit config list-models        # See available models

@@ -4,7 +4,9 @@
 package cli
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/PedroHercules/gommit/pkg/application/services"
@@ -62,9 +64,9 @@ func (c *CLI) handleCommit(args []string) error {
 
 	// Parse commit flags
 	var model string
-	autoCommit := true
 	dryRun := false
 	force := false
+	autoCommit := false
 
 	// Simple flag parsing
 	for i, arg := range args {
@@ -73,8 +75,8 @@ func (c *CLI) handleCommit(args []string) error {
 			if i+1 < len(args) {
 				model = args[i+1]
 			}
-		case "--no-commit":
-			autoCommit = false
+		case "--commit":
+			autoCommit = true
 		case "--dry-run":
 			dryRun = true
 		case "--force":
@@ -82,7 +84,7 @@ func (c *CLI) handleCommit(args []string) error {
 		}
 	}
 
-	// Generate and optionally commit
+	// Generate commit message
 	req := services.GenerateAndCommitRequest{
 		Model:      model,
 		AutoCommit: autoCommit,
@@ -114,15 +116,45 @@ func (c *CLI) handleCommit(args []string) error {
 		}
 	}
 
-	// Show commit result
-	if resp.Committed {
-		fmt.Printf("\n✅ Successfully committed with hash: %s\n", resp.CommitHash)
-	} else if autoCommit && !dryRun {
-		fmt.Println("\n❌ Failed to commit changes")
-	} else if !autoCommit {
-		fmt.Println("\n💡 To commit these changes, run: git commit -m \"" + resp.CommitMessage + "\"")
-	} else if dryRun {
+	// If dry run, just show the message and exit
+	if dryRun {
 		fmt.Println("\n🧪 Dry run completed - no changes were committed")
+		return nil
+	}
+
+	// If auto-commit was requested and successful, show result
+	if autoCommit {
+		if resp.Committed {
+			fmt.Printf("\n✅ Successfully committed with hash: %s\n", resp.CommitHash)
+		} else {
+			fmt.Println("\n❌ Failed to commit changes")
+		}
+		return nil
+	}
+
+	// Ask user if they want to commit (only when --commit flag was not used)
+	fmt.Print("\n❓ Do you want to commit these changes? (y/N): ")
+	reader := bufio.NewReader(os.Stdin)
+	response, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read user input: %w", err)
+	}
+
+	response = strings.TrimSpace(strings.ToLower(response))
+	if response == "y" || response == "yes" {
+		// Perform the actual commit
+		commitResp, err := c.commitService.CommitWithMessage(resp.CommitMessage, false)
+		if err != nil {
+			return fmt.Errorf("failed to commit: %w", err)
+		}
+
+		if !commitResp.Success {
+			return fmt.Errorf("commit failed: %s", commitResp.ErrorMessage)
+		}
+
+		fmt.Printf("\n✅ Successfully committed with hash: %s\n", commitResp.CommitHash)
+	} else {
+		fmt.Println("\n💡 Commit cancelled. To commit later, run: git commit -m \"" + resp.CommitMessage + "\"")
 	}
 
 	return nil

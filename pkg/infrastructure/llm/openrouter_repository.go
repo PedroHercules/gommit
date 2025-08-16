@@ -302,17 +302,20 @@ func (r *OpenRouterRepository) GetModelInfo(modelID string) (*repositories.LLMMo
 
 // createCommitPrompt creates a prompt for commit message generation.
 func (r *OpenRouterRepository) createCommitPrompt(diff *entities.GitDiff) string {
-	prompt := fmt.Sprintf(`Generate a concise commit message for the following git diff. Follow conventional commits format (type(scope): description).
+	prompt := fmt.Sprintf(`You are a commit message generator following Conventional Commits specification. Analyze the git diff and generate ONLY a commit message. STRICT FORMAT: type(scope): description
 
-Files changed: %s
-Changes summary: %s
+- List of changes in bullet points
+- Each bullet explains what was added/changed/fixed
+- Use past tense for changes (Added, Enhanced, Fixed, etc.)
+
+Changed files:
+- %s
+
+RULES: 1) Types: feat, fix, docs, style, refactor, test, chore, ci, perf, build 2) Scope: use module/component name 3) Description: present tense, lowercase, no period, max 50 chars 4) Body: bullet points with past tense verbs (Added, Enhanced, Fixed, Updated, Implemented) 5) Always include 'Changed files:' section with file paths 6) Return ONLY the commit message, no explanations
 
 Git diff:
-%s
-
-Generate only the commit message, nothing else. Keep it under 72 characters for the summary line.`,
-		strings.Join(diff.Files, ", "),
-		diff.GetChangesSummary(),
+%s`,
+		strings.Join(diff.Files, "\n- "),
 		diff.Content)
 
 	return prompt
