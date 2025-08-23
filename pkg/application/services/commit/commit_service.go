@@ -4,15 +4,20 @@ import "github.com/PedroHercules/gommit/pkg/domain/usecases"
 
 type ServiceContainer struct {
 	generateCommitPreviewService *generateCommitPreviewService
+	confirmCommitService         *ConfirmCommitService
 }
 
 type CommitService struct {
 	services *ServiceContainer
 }
 
-func NewCommitService(useCases ...*usecases.GenerateCommitUseCase) *CommitService {
+func NewCommitService(
+	generateCommitUseCase *usecases.GenerateCommitUseCase,
+	commitUseCase *usecases.CommitUseCase,
+) *CommitService {
 	container := &ServiceContainer{
-		generateCommitPreviewService: newGenerateCommitPreviewService(useCases[0]),
+		generateCommitPreviewService: newGenerateCommitPreviewService(generateCommitUseCase),
+		confirmCommitService:         newConfirmCommitService(commitUseCase),
 	}
 
 	return &CommitService{
