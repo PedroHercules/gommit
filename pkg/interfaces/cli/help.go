@@ -13,7 +13,6 @@ USAGE:
 COMMANDS:
     commit              Generate and commit with AI (default)
     config              Manage configuration
-    status              Show repository status
     validate <message>  Validate a commit message
     version             Show version information
     help                Show this help message
