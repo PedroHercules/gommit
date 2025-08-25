@@ -1,4 +1,4 @@
-package services
+package commit_services
 
 import (
 	"github.com/PedroHercules/gommit/pkg/domain/usecases"
@@ -12,6 +12,7 @@ type ConfirmCommitDTO struct {
 type ConfirmCommitEntity struct {
 	Success      bool
 	ErrorMessage string
+	CommitHash   string
 }
 
 type ConfirmCommitService struct {
@@ -44,5 +45,6 @@ func (commitService *ConfirmCommitService) ConfirmCommit(data ConfirmCommitDTO) 
 	}
 
 	response.Success = true
+	response.CommitHash = commitResponse.CommitHash
 	return response, nil
 }

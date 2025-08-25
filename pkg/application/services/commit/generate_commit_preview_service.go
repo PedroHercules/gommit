@@ -1,4 +1,4 @@
-package services
+package commit_services
 
 import "github.com/PedroHercules/gommit/pkg/domain/usecases"
 

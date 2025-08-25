@@ -10,17 +10,18 @@ import (
 	"strings"
 
 	"github.com/PedroHercules/gommit/pkg/application/services"
+	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
 )
 
 // CLI represents the command-line interface.
 // It coordinates between user input and application services.
 type CLI struct {
-	commitService *services.CommitService
+	commitService *commit_services.CommitService
 	configService *services.ConfigService
 }
 
 // NewCLI creates a new CLI instance.
-func NewCLI(commitService *services.CommitService, configService *services.ConfigService) *CLI {
+func NewCLI(commitService *commit_services.CommitService, configService *services.ConfigService) *CLI {
 	return &CLI{
 		commitService: commitService,
 		configService: configService,
@@ -42,10 +43,6 @@ func (c *CLI) Run(args []string) error {
 		return c.handleCommit(args[2:])
 	case "config":
 		return c.handleConfig(args[2:])
-	case "status":
-		return c.handleStatus()
-	case "validate":
-		return c.handleValidate(args[2:])
 	case "version":
 		return c.showVersion()
 	default:
@@ -85,15 +82,14 @@ func (c *CLI) handleCommit(args []string) error {
 	}
 
 	// Generate commit message
-	req := services.GenerateAndCommitRequest{
-		Model:      model,
-		AutoCommit: autoCommit,
-		DryRun:     dryRun,
-		Force:      force,
+	req := commit_services.GenerateCommitPreviewDTO{
+		Model:  model,
+		DryRun: dryRun,
+		Force:  force,
 	}
 
 	fmt.Println("🤖 Generating commit message with AI...")
-	resp, err := c.commitService.GenerateAndCommit(req)
+	resp, err := c.commitService.GenerateCommitPreview(req)
 	if err != nil {
 		return fmt.Errorf("failed to generate commit: %w", err)
 	}
@@ -124,12 +120,20 @@ func (c *CLI) handleCommit(args []string) error {
 
 	// If auto-commit was requested and successful, show result
 	if autoCommit {
-		if resp.Committed {
-			fmt.Printf("\n✅ Successfully committed with hash: %s\n", resp.CommitHash)
-		} else {
-			fmt.Println("\n❌ Failed to commit changes")
+		confirmCommitResponse, confirmCommitErr := c.commitService.ConfirmCommit(commit_services.ConfirmCommitDTO{
+			Message: resp.CommitMessage,
+			DryRun:  dryRun,
+		})
+
+		if confirmCommitErr != nil {
+			return fmt.Errorf("failed to confirm commit: %w", confirmCommitErr)
 		}
-		return nil
+
+		if !confirmCommitResponse.Success {
+			return fmt.Errorf("commit confirmation failed: %s", confirmCommitResponse.ErrorMessage)
+		}
+
+		fmt.Printf("\n✅ Successfully committed with hash: %s\n", confirmCommitResponse.CommitHash)
 	}
 
 	// Ask user if they want to commit (only when --commit flag was not used)
@@ -143,16 +147,19 @@ func (c *CLI) handleCommit(args []string) error {
 	response = strings.TrimSpace(strings.ToLower(response))
 	if response == "y" || response == "yes" {
 		// Perform the actual commit
-		commitResp, err := c.commitService.CommitWithMessage(resp.CommitMessage, false)
-		if err != nil {
-			return fmt.Errorf("failed to commit: %w", err)
+		confirmCommitResponse, confirmCommitErr := c.commitService.ConfirmCommit(commit_services.ConfirmCommitDTO{
+			Message: resp.CommitMessage,
+			DryRun:  false,
+		})
+		if confirmCommitErr != nil {
+			return fmt.Errorf("failed to commit: %w", confirmCommitErr)
 		}
 
-		if !commitResp.Success {
-			return fmt.Errorf("commit failed: %s", commitResp.ErrorMessage)
+		if !confirmCommitResponse.Success {
+			return fmt.Errorf("commit failed: %s", confirmCommitResponse.ErrorMessage)
 		}
 
-		fmt.Printf("\n✅ Successfully committed with hash: %s\n", commitResp.CommitHash)
+		fmt.Printf("\n✅ Successfully committed with hash: %s\n", confirmCommitResponse.CommitHash)
 	} else {
 		fmt.Println("\n💡 Commit cancelled. To commit later, run: git commit -m \"" + resp.CommitMessage + "\"")
 	}
@@ -410,90 +417,6 @@ func (c *CLI) handleConfigValidate() error {
 		fmt.Println("\n💡 Recommendations:")
 		for _, rec := range resp.Recommendations {
 			fmt.Printf("   • %s\n", rec)
-		}
-	}
-
-	return nil
-}
-
-// handleStatus processes the status command.
-func (c *CLI) handleStatus() error {
-	resp, err := c.commitService.GetRepositoryStatus()
-	if err != nil {
-		return fmt.Errorf("failed to get repository status: %w", err)
-	}
-
-	if resp.ErrorMessage != "" {
-		return fmt.Errorf("failed to get status: %s", resp.ErrorMessage)
-	}
-
-	fmt.Printf("\n📊 Repository Status:\n\n")
-	fmt.Printf("🌿 Current Branch: %s\n", resp.CurrentBranch)
-	fmt.Printf("📝 Last Commit: %s\n", resp.LastCommit)
-
-	if resp.IsClean {
-		fmt.Println("✅ Working directory is clean")
-	} else {
-		if len(resp.StagedFiles) > 0 {
-			fmt.Printf("\n📋 Staged files (%d):\n", len(resp.StagedFiles))
-			for _, file := range resp.StagedFiles {
-				fmt.Printf("   + %s\n", file)
-			}
-		}
-
-		if len(resp.UnstagedFiles) > 0 {
-			fmt.Printf("\n📄 Modified files (%d):\n", len(resp.UnstagedFiles))
-			for _, file := range resp.UnstagedFiles {
-				fmt.Printf("   • %s\n", file)
-			}
-		}
-	}
-
-	return nil
-}
-
-// handleValidate processes the validate command.
-func (c *CLI) handleValidate(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("commit message is required. Usage: gommit validate \"commit message\"")
-	}
-
-	message := strings.Join(args, " ")
-	resp, err := c.commitService.ValidateCommitMessage(message)
-	if err != nil {
-		return fmt.Errorf("failed to validate commit message: %w", err)
-	}
-
-	if resp.ErrorMessage != "" {
-		return fmt.Errorf("validation failed: %s", resp.ErrorMessage)
-	}
-
-	fmt.Printf("\n📝 Commit Message Validation:\n\n")
-	fmt.Printf("Message: \"%s\"\n\n", message)
-
-	if resp.Valid {
-		fmt.Println("✅ Message is valid")
-	} else {
-		fmt.Println("❌ Message has issues")
-	}
-
-	if resp.IsConventional {
-		fmt.Println("✅ Follows conventional commits format")
-	} else {
-		fmt.Println("⚠️  Does not follow conventional commits format")
-	}
-
-	if len(resp.Warnings) > 0 {
-		fmt.Println("\n⚠️  Warnings:")
-		for _, warning := range resp.Warnings {
-			fmt.Printf("   • %s\n", warning)
-		}
-	}
-
-	if len(resp.Suggestions) > 0 {
-		fmt.Println("\n💡 Suggestions:")
-		for _, suggestion := range resp.Suggestions {
-			fmt.Printf("   • %s\n", suggestion)
 		}
 	}
 

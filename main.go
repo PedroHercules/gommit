@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/PedroHercules/gommit/pkg/application/services"
+	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
 	"github.com/PedroHercules/gommit/pkg/domain/usecases"
 	"github.com/PedroHercules/gommit/pkg/infrastructure/config"
 	"github.com/PedroHercules/gommit/pkg/infrastructure/git"
@@ -31,7 +32,7 @@ func main() {
 	generateCommitUseCase := usecases.NewGenerateCommitUseCase(gitRepo, llmRepo, configRepo)
 	commitUseCase := usecases.NewCommitUseCase(gitRepo)
 
-	commitService := services.NewCommitService(generateCommitUseCase, commitUseCase, configUseCase)
+	commitService := commit_services.NewCommitService(generateCommitUseCase, commitUseCase)
 	configService := services.NewConfigService(configUseCase)
 
 	cliHandler := cli.NewCLI(commitService, configService)

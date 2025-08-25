@@ -1,4 +1,4 @@
-package services
+package commit_services
 
 import "github.com/PedroHercules/gommit/pkg/domain/usecases"
 
@@ -23,4 +23,12 @@ func NewCommitService(
 	return &CommitService{
 		services: container,
 	}
+}
+
+func (c *CommitService) GenerateCommitPreview(data GenerateCommitPreviewDTO) (*GenerateCommitPreviewEntity, error) {
+	return c.services.generateCommitPreviewService.GenerateCommitPreview(data)
+}
+
+func (c *CommitService) ConfirmCommit(data ConfirmCommitDTO) (*ConfirmCommitEntity, error) {
+	return c.services.confirmCommitService.ConfirmCommit(data)
 }
