@@ -35,12 +35,11 @@ CONFIG COMMANDS:
     config validate          Validate current configuration
 
 EXAMPLES:
-    gommit                           # Generate message only (default)
-    gommit --commit                  # Generate message and commit
-    gommit --model claude-3-sonnet   # Use specific model
-    gommit config set-key sk-xxx     # Set API key
-    gommit config list-models        # See available models
-    gommit status                    # Check repository status
+    gommit commit                           # Generate message and commit
+    gommit commit --model claude-3-sonnet   # Use specific model
+    gommit config set-key sk-xxx            # Set API key
+    gommit config list-models               # See available models
+    gommit config summary                   # Show configuration summary   
     gommit validate "feat: add new feature"  # Validate message
 
 NOTES:

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/PedroHercules/gommit/pkg/application/services"
 	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
+	config_services "github.com/PedroHercules/gommit/pkg/application/services/config"
 	"github.com/PedroHercules/gommit/pkg/domain/usecases"
 	"github.com/PedroHercules/gommit/pkg/infrastructure/config"
 	"github.com/PedroHercules/gommit/pkg/infrastructure/git"
@@ -33,7 +33,7 @@ func main() {
 	commitUseCase := usecases.NewCommitUseCase(gitRepo)
 
 	commitService := commit_services.NewCommitService(generateCommitUseCase, commitUseCase)
-	configService := services.NewConfigService(configUseCase)
+	configService := config_services.NewConfigService(configUseCase)
 
 	cliHandler := cli.NewCLI(commitService, configService)
 

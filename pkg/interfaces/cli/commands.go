@@ -9,19 +9,19 @@ import (
 	"os"
 	"strings"
 
-	"github.com/PedroHercules/gommit/pkg/application/services"
 	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
+	config_services "github.com/PedroHercules/gommit/pkg/application/services/config"
 )
 
 // CLI represents the command-line interface.
 // It coordinates between user input and application services.
 type CLI struct {
 	commitService *commit_services.CommitService
-	configService *services.ConfigService
+	configService *config_services.ConfigService
 }
 
 // NewCLI creates a new CLI instance.
-func NewCLI(commitService *commit_services.CommitService, configService *services.ConfigService) *CLI {
+func NewCLI(commitService *commit_services.CommitService, configService *config_services.ConfigService) *CLI {
 	return &CLI{
 		commitService: commitService,
 		configService: configService,
@@ -206,7 +206,7 @@ func (c *CLI) handleSetAPIKey(args []string) error {
 
 	fmt.Println("🔐 Storing API key securely...")
 
-	req := services.SetupAPIKeyRequest{
+	req := config_services.SetupAPIKeyRequest{
 		APIKey:      args[0],
 		ValidateKey: true,
 	}
@@ -266,7 +266,7 @@ func (c *CLI) handleSetModel(args []string) error {
 
 	fmt.Println("⚙️ Setting default model...")
 
-	req := services.SetupModelRequest{
+	req := config_services.SetupModelRequest{
 		Model:         args[0],
 		ValidateModel: true,
 	}
