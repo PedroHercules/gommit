@@ -6,6 +6,7 @@ import (
 
 	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
 	config_services "github.com/PedroHercules/gommit/pkg/application/services/config"
+	pr_services "github.com/PedroHercules/gommit/pkg/application/services/pull-request"
 	"github.com/PedroHercules/gommit/pkg/domain/usecases"
 	"github.com/PedroHercules/gommit/pkg/infrastructure/config"
 	"github.com/PedroHercules/gommit/pkg/infrastructure/git"
@@ -31,11 +32,13 @@ func main() {
 	configUseCase := usecases.NewConfigUseCase(configRepo, llmRepo)
 	generateCommitUseCase := usecases.NewGenerateCommitUseCase(gitRepo, llmRepo, configRepo)
 	commitUseCase := usecases.NewCommitUseCase(gitRepo)
+	pullRequestUseCase := usecases.NewPullRequestUseCase(gitRepo, llmRepo, configRepo)
 
 	commitService := commit_services.NewCommitService(generateCommitUseCase, commitUseCase)
 	configService := config_services.NewConfigService(configUseCase)
+	pullRequestService := pr_services.NewPullRequestService(pullRequestUseCase)
 
-	cliHandler := cli.NewCLI(commitService, configService)
+	cliHandler := cli.NewCLI(commitService, configService, pullRequestService)
 
 	if err := cliHandler.Run(os.Args); err != nil {
 		fmt.Printf("Error: %v\n", err)

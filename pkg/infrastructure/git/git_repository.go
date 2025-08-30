@@ -59,6 +59,16 @@ func (r *CommandGitRepository) GetWorkingDiff() (*entities.GitDiff, error) {
 	return entities.NewGitDiff(output)
 }
 
+// GetDiffBetweenBranches returns the diff between two branches.
+func (r *CommandGitRepository) GetDiffBetweenBranches(branch1, branch2 string) (*entities.GitDiff, error) {
+	output, err := r.runGitCommand("diff", branch1, branch2)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get diff between branches: %w", err)
+	}
+
+	return entities.NewGitDiff(output)
+}
+
 // Commit creates a new commit with the given message.
 func (r *CommandGitRepository) Commit(message string) (string, error) {
 	if message == "" {
