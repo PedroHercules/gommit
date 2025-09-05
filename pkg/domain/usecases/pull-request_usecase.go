@@ -69,7 +69,7 @@ func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest)
 	uc.llmRepo.SetAPIKey(config.APIKey)
 
 	// Step 2: Gerar preview do PR
-	llmResponse, err := uc.llmRepo.GenerateCommitMessage(diff, modelToUse)
+	llmResponse, err := uc.llmRepo.GeneratePRDescription(diff, modelToUse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate PR preview: %w", err)
 	}
@@ -80,9 +80,11 @@ func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest)
 		return nil, fmt.Errorf("LLM generation failed: %s", llmResponse.Error)
 	}
 
+	// Extract title and body from LLM response
+	body := llmResponse.Message
+
 	pullRequest := &entities.PullRequest{
-		Title: "Teste",
-		Body:  llmResponse.Message,
+		Body: body,
 	}
 
 	response.PullRequest = pullRequest

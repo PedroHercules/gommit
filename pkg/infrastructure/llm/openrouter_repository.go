@@ -402,7 +402,7 @@ Git diff:
 func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
 	prompt := fmt.Sprintf(`You are a pull request description generator. Analyze the git diff and generate a clear, concise pull request description following this format EXACTLY:
 
-# [Title: Brief description of the main purpose of the changes - only capitalize the first letter of each word]
+# [Title: Brief description of the main purpose of the changes - only capitalize the first letter of the sentence]
 
 ## Description
 [A paragraph that provides an overview of the changes, including their purpose, scope, and impact. Explain what was improved, added, or fixed.]
@@ -419,13 +419,6 @@ func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
 ### Modified Files
 - [file path 1]
 - [file path 2]
-
-### Change Type
-- [x] New feature (non-breaking change which adds functionality)
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] This change requires a documentation update
-- [ ] Other (e.g., refactoring, performance improvement)
 
 Git diff:
 %s
