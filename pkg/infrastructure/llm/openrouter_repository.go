@@ -430,13 +430,21 @@ func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
 [A paragraph that provides an overview of the changes, including their purpose, scope, and impact. Explain what was improved, added, or fixed.]
 
 ### Key Changes
-- **[Category/Feature 1]:**
+- **Category/Feature 1:**
   - [Detailed bullet point about specific change]
   - [Detailed bullet point about specific change]
 
-- **[Category/Feature 2]:**
+- **Category/Feature 2:**
   - [Detailed bullet point about specific change]
   - [Detailed bullet point about specific change]
+
+### Type of Changes
+- [ ] New feature (non-breaking change which adds functionality)
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] Performance improvement (non-breaking change which improves efficiency)
+- [ ] Code refactor (non-breaking change which improves code quality)
+- [ ] Documentation update (changes to documentation only)
+- [ ] Breaking change (fix or feature that would cause existing functionality to change)
 
 ### Modified Files
 - [file path 1]
