@@ -39,10 +39,10 @@ func NewOpenRouterRepository(apiKey string) *OpenRouterRepository {
 
 // openRouterRequest represents the request structure for OpenRouter API.
 type openRouterRequest struct {
-	Model    string                   `json:"model"`
-	Messages []openRouterMessage     `json:"messages"`
-	Stream   bool                     `json:"stream"`
-	MaxTokens int                     `json:"max_tokens,omitempty"`
+	Model     string              `json:"model"`
+	Messages  []openRouterMessage `json:"messages"`
+	Stream    bool                `json:"stream"`
+	MaxTokens int                 `json:"max_tokens,omitempty"`
 }
 
 // openRouterMessage represents a message in the conversation.
@@ -150,6 +150,83 @@ func (r *OpenRouterRepository) GenerateCommitMessage(diff *entities.GitDiff, mod
 
 	return &repositories.LLMResponse{
 		Message:     commitMessage,
+		Model:       response.Model,
+		TokensUsed:  response.Usage.TotalTokens,
+		ContextSize: 0, // OpenRouter doesn't provide this in the response
+		Success:     true,
+	}, nil
+}
+
+// GeneratePRDescription generates a PR description based on the git diff.
+func (r *OpenRouterRepository) GeneratePRDescription(diff *entities.GitDiff, model string) (*repositories.LLMResponse, error) {
+	if r.apiKey == "" {
+		return nil, errors.New("API key not configured")
+	}
+
+	if !diff.HasChanges() {
+		return nil, errors.New("no changes to generate PR description for")
+	}
+
+	// Determine which model to use
+	modelToUse := model
+	if modelToUse == "" {
+		// Get the best available model
+		bestModel, err := r.GetBestModel()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get best model: %w", err)
+		}
+		modelToUse = bestModel.ID
+	}
+
+	// Create the prompt for PR description generation
+	prompt := r.createPRPrompt(diff)
+
+	// Prepare the request
+	request := openRouterRequest{
+		Model: modelToUse,
+		Messages: []openRouterMessage{
+			{
+				Role:    "system",
+				Content: "You are an expert developer who writes clear, concise PR descriptions. Generate a PR description based on the provided git diff.",
+			},
+			{
+				Role:    "user",
+				Content: prompt,
+			},
+		},
+		Stream:    false,
+		MaxTokens: 300, // PR descriptions can be longer
+	}
+
+	// Make the API call
+	response, err := r.makeAPICall(request)
+	if err != nil {
+		return &repositories.LLMResponse{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
+	}
+
+	if response.Error != nil {
+		return &repositories.LLMResponse{
+			Success: false,
+			Error:   response.Error.Message,
+		}, nil
+	}
+
+	if len(response.Choices) == 0 {
+		return &repositories.LLMResponse{
+			Success: false,
+			Error:   "no response from LLM",
+		}, nil
+	}
+
+	// Extract and clean the PR description
+	prDescription := strings.TrimSpace(response.Choices[0].Message.Content)
+	prDescription = r.cleanPRDescription(prDescription)
+
+	return &repositories.LLMResponse{
+		Message:     prDescription,
 		Model:       response.Model,
 		TokensUsed:  response.Usage.TotalTokens,
 		ContextSize: 0, // OpenRouter doesn't provide this in the response
@@ -321,26 +398,87 @@ Git diff:
 	return prompt
 }
 
+// createPRPrompt creates a prompt for pull request description generation.
+func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
+	prompt := fmt.Sprintf(`You are a pull request description generator. Analyze the git diff and generate a clear, concise pull request description following this format EXACTLY:
+
+# [Title: Brief description of the main purpose of the changes - only capitalize the first letter of each word]
+
+## Description
+[A paragraph that provides an overview of the changes, including their purpose, scope, and impact. Explain what was improved, added, or fixed.]
+
+### Key Changes
+- **[Category/Feature 1]:**
+  - [Detailed bullet point about specific change]
+  - [Detailed bullet point about specific change]
+
+- **[Category/Feature 2]:**
+  - [Detailed bullet point about specific change]
+  - [Detailed bullet point about specific change]
+
+### Modified Files
+- [file path 1]
+- [file path 2]
+
+### Change Type
+- [x] New feature (non-breaking change which adds functionality)
+- [ ] Bug fix (non-breaking change which fixes an issue)
+- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] This change requires a documentation update
+- [ ] Other (e.g., refactoring, performance improvement)
+
+Git diff:
+%s
+
+RULES:
+1) Follow the format EXACTLY as shown above
+2) Do NOT add any additional explanations or notes outside the template
+3) Do NOT include any text like "Here's the PR description" or "I've analyzed the diff"
+4) Return ONLY the PR description using the template format
+5) Do NOT add any signature, comments, or other text after the PR description
+
+Changed files:
+- %s`,
+		diff.Content,
+		strings.Join(diff.Files, "\n- "))
+
+	return prompt
+}
+
 // cleanCommitMessage cleans and formats the generated commit message.
 func (r *OpenRouterRepository) cleanCommitMessage(message string) string {
 	// Remove common prefixes that LLMs might add
 	message = strings.TrimPrefix(message, "Commit message: ")
 	message = strings.TrimPrefix(message, "commit: ")
 	message = strings.TrimPrefix(message, "Commit: ")
-	
+
 	// Remove quotes if the entire message is quoted
 	if strings.HasPrefix(message, `"`) && strings.HasSuffix(message, `"`) {
 		message = strings.Trim(message, `"`)
 	}
-	
+
 	// Remove any trailing periods from the summary line
 	lines := strings.Split(message, "\n")
 	if len(lines) > 0 {
 		lines[0] = strings.TrimSuffix(lines[0], ".")
 		message = strings.Join(lines, "\n")
 	}
-	
+
 	return strings.TrimSpace(message)
+}
+
+func (r *OpenRouterRepository) cleanPRDescription(description string) string {
+	// Remove common prefixes that LLMs might add
+	description = strings.TrimPrefix(description, "Pull request description: ")
+	description = strings.TrimPrefix(description, "pr description: ")
+	description = strings.TrimPrefix(description, "PR description: ")
+
+	// Remove quotes if the entire message is quoted
+	if strings.HasPrefix(description, `"`) && strings.HasSuffix(description, `"`) {
+		description = strings.Trim(description, `"`)
+	}
+
+	return strings.TrimSpace(description)
 }
 
 // makeAPICall makes an HTTP request to the OpenRouter API.
