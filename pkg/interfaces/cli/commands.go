@@ -11,6 +11,7 @@ import (
 
 	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
 	config_services "github.com/PedroHercules/gommit/pkg/application/services/config"
+	pr_services "github.com/PedroHercules/gommit/pkg/application/services/pull-request"
 )
 
 // CLI represents the command-line interface.
@@ -18,13 +19,15 @@ import (
 type CLI struct {
 	commitService *commit_services.CommitService
 	configService *config_services.ConfigService
+	prService     *pr_services.ServiceContainer
 }
 
 // NewCLI creates a new CLI instance.
-func NewCLI(commitService *commit_services.CommitService, configService *config_services.ConfigService) *CLI {
+func NewCLI(commitService *commit_services.CommitService, configService *config_services.ConfigService, prService *pr_services.ServiceContainer) *CLI {
 	return &CLI{
 		commitService: commitService,
 		configService: configService,
+		prService:     prService,
 	}
 }
 
@@ -45,6 +48,8 @@ func (c *CLI) Run(args []string) error {
 		return c.handleConfig(args[2:])
 	case "version":
 		return c.showVersion()
+	case "pr":
+		return c.handlePr(args[2:])
 	default:
 		// If no subcommand is provided, default to commit
 		if strings.HasPrefix(command, "-") {
@@ -163,6 +168,44 @@ func (c *CLI) handleCommit(args []string) error {
 	} else {
 		fmt.Println("\n💡 Commit cancelled. To commit later, run: git commit -m \"" + resp.CommitMessage + "\"")
 	}
+
+	return nil
+}
+
+func (c *CLI) handlePr(args []string) error {
+	fmt.Println("🔍 Analyzing staged changes...")
+
+	// Parse commit flags
+	var baseBranch string
+
+	// Simple flag parsing
+	for i, arg := range args {
+		switch arg {
+		case "--base-branch":
+			if i+1 < len(args) {
+				baseBranch = args[i+1]
+			}
+		}
+	}
+
+	// Generate PR message
+	req := &pr_services.GeneratePRPreviewRequest{
+		BaseBranch: baseBranch,
+	}
+
+	fmt.Println("🤖 Generating PR message with AI...")
+	resp, err := c.prService.GeneratePRPreview(req)
+	if err != nil {
+		return fmt.Errorf("failed to generate PR message: %w", err)
+	}
+
+	if !resp.Success {
+		return fmt.Errorf("PR message generation failed: %s", resp.ErrorMessage)
+	}
+
+	// Display results
+	fmt.Printf("📝 Generated PR title:\n%s\n\n", resp.PullRequest.Title)
+	fmt.Printf("\n📝 Generated PR message:\n%s\n\n", resp.PullRequest.Body)
 
 	return nil
 }

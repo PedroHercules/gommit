@@ -17,6 +17,9 @@ type GitRepository interface {
 	// This is equivalent to running 'git diff'.
 	GetWorkingDiff() (*entities.GitDiff, error)
 
+	// GetDiffBetweenBranches returns the diff between two branches.
+	GetDiffBetweenBranches(branch1, branch2 string) (*entities.GitDiff, error)
+
 	// Commit creates a new commit with the given message.
 	// Returns the commit hash if successful.
 	Commit(message string) (string, error)

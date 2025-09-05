@@ -17,12 +17,12 @@ type LLMModel struct {
 
 // LLMResponse represents the response from an LLM service.
 type LLMResponse struct {
-	Message      string // The generated commit message
-	Model        string // The model that was used
-	TokensUsed   int    // Number of tokens consumed
-	ContextSize  int    // Context size used
-	Success      bool   // Whether the request was successful
-	Error        string // Error message if any
+	Message     string // The generated commit message
+	Model       string // The model that was used
+	TokensUsed  int    // Number of tokens consumed
+	ContextSize int    // Context size used
+	Success     bool   // Whether the request was successful
+	Error       string // Error message if any
 }
 
 // LLMRepository defines the interface for LLM operations.
@@ -32,6 +32,10 @@ type LLMRepository interface {
 	// GenerateCommitMessage generates a commit message based on the git diff.
 	// It uses the configured model or selects the best available one.
 	GenerateCommitMessage(diff *entities.GitDiff, model string) (*LLMResponse, error)
+
+	// GeneratePRDescription generates a pull request description based on the git diff.
+	// It uses the configured model or selects the best available one.
+	GeneratePRDescription(diff *entities.GitDiff, model string) (*LLMResponse, error)
 
 	// GetAvailableModels returns a list of available LLM models.
 	// This can be used for model selection and validation.
