@@ -63,21 +63,25 @@ gommit/
 ### Princípios da Clean Architecture
 
 #### 1. **Camada de Domínio** (`pkg/domain/`)
+
 - **Entidades**: Objetos de negócio fundamentais (`Commit`, `Config`, `GitDiff`)
 - **Repositórios**: Interfaces que definem como acessar dados
 - **Casos de Uso**: Lógica de negócio pura, independente de frameworks
 
 #### 2. **Camada de Infraestrutura** (`pkg/infrastructure/`)
+
 - **Implementações**: Código que interage com sistemas externos
 - **Git**: Comandos Git via CLI
 - **LLM**: Integração com APIs de IA (OpenRouter)
 - **Config**: Armazenamento de configurações e credenciais
 
 #### 3. **Camada de Aplicação** (`pkg/application/`)
+
 - **Serviços**: Orquestram casos de uso e coordenam operações
 - **Fluxo**: Conectam a interface do usuário com a lógica de negócio
 
 #### 4. **Camada de Interface** (`pkg/interfaces/`)
+
 - **CLI**: Interface de linha de comando
 - **Entrada**: Processa comandos do usuário
 - **Saída**: Apresenta resultados formatados
@@ -85,6 +89,7 @@ gommit/
 ## 🚀 Instalação e Uso
 
 ### Pré-requisitos
+
 - Go 1.21 ou superior
 - Git instalado e configurado
 - Chave de API do OpenRouter
@@ -131,6 +136,9 @@ go build -o gommit main.go
 # Gerar descrição de Pull Request
 ./gommit pr
 
+# Gerar PR comparando com branch específica
+./gommit pr --base-branch develop
+
 # Validar uma mensagem de commit
 ./gommit validate "feat: add new feature"
 
@@ -138,35 +146,27 @@ go build -o gommit main.go
 ./gommit help
 ```
 
-### Guia Completo de Uso
-
-Para instruções detalhadas, exemplos práticos e solução de problemas, consulte o **[Guia de Uso Completo](USAGE.md)**.
-
-O guia inclui:
-- Todos os comandos e opções disponíveis
-- Fluxos de trabalho recomendados
-- Exemplos práticos de uso
-- Configuração avançada
-- Solução de problemas comuns
-- Scripts de automação
-
 ## 📚 Guia de Aprendizado
 
 ### 🎓 Conceitos de Go Demonstrados
 
 1. **Interfaces e Polimorfismo**
+
    - Veja `pkg/domain/repositories/` para interfaces bem definidas
    - Implementações em `pkg/infrastructure/`
 
 2. **Estruturas e Métodos**
+
    - Entidades em `pkg/domain/entities/`
    - Métodos de validação e transformação
 
 3. **Tratamento de Erros**
+
    - Padrão Go de retorno de erro
    - Wrapping de erros com contexto
 
 4. **Organização de Pacotes**
+
    - Separação clara de responsabilidades
    - Imports bem organizados
 
@@ -177,7 +177,9 @@ O guia inclui:
 ### Pontos de Estudo
 
 #### Iniciante
+
 1. **Entidades** (`pkg/domain/entities/`)
+
    - Como definir estruturas
    - Métodos de validação
    - Construtores
@@ -187,7 +189,9 @@ O guia inclui:
    - Desacoplamento
 
 #### Intermediário
+
 3. **Casos de Uso** (`pkg/domain/usecases/`)
+
    - Lógica de negócio
    - Orquestração de operações
 
@@ -196,7 +200,9 @@ O guia inclui:
    - Tratamento de erros
 
 #### Avançado
+
 5. **Serviços** (`pkg/application/services/`)
+
    - Coordenação de casos de uso
    - Transformação de dados
 
@@ -269,7 +275,3 @@ MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 - [joho/godotenv](https://github.com/joho/godotenv) pelo gerenciamento de variáveis
 - Comunidade Go pelas melhores práticas e padrões de arquitetura
 - Clean Architecture por Robert C. Martin pelos princípios de design
-
----
-
-**Desenvolvido para aprender Go e Clean Architecture**

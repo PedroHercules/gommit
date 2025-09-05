@@ -12,6 +12,7 @@ USAGE:
 
 COMMANDS:
     commit              Generate and commit with AI (default)
+    pr                  Generate Pull Request description
     config              Manage configuration
     validate <message>  Validate a commit message
     version             Show version information
@@ -22,6 +23,9 @@ COMMIT OPTIONS:
     --commit              Generate message and commit automatically
     --dry-run            Show what would be done without committing
     --force              Force commit even with warnings
+
+PR OPTIONS:
+    --base-branch <branch> Specify base branch for comparison (default: main)
 
 CONFIG COMMANDS:
     config set-key <key>      Set OpenRouter API key
@@ -37,6 +41,8 @@ CONFIG COMMANDS:
 EXAMPLES:
     gommit commit                           # Generate message and commit
     gommit commit --model claude-3-sonnet   # Use specific model
+    gommit pr                               # Generate PR description
+    gommit pr --base-branch develop         # Generate PR against develop branch
     gommit config set-key sk-xxx            # Set API key
     gommit config list-models               # See available models
     gommit config summary                   # Show configuration summary   
