@@ -379,27 +379,54 @@ func (r *OpenRouterRepository) GetModelInfo(modelID string) (*repositories.LLMMo
 
 // createCommitPrompt creates a prompt for commit message generation.
 func (r *OpenRouterRepository) createCommitPrompt(diff *entities.GitDiff) string {
-	prompt := fmt.Sprintf(`You are a commit message generator following Conventional Commits specification. Analyze the git diff and generate ONLY a commit message. STRICT FORMAT: type(scope): description
+	prompt := fmt.Sprintf(`You are a commit message generator following Conventional Commits specification. Analyze the git diff and generate ONLY a commit message that follows EXACTLY this format:
 
-- List of changes in bullet points
-- Each bullet explains what was added/changed/fixed
-- Use past tense for changes (Added, Enhanced, Fixed, etc.)
+type(scope): description
+- Bullet point explaining what was added/changed/fixed in past tense
+- Bullet point explaining what was added/changed/fixed in past tense
+- Bullet point explaining what was added/changed/fixed in past tense
 
 Changed files:
-- %s
+- file/path.ext
 
-RULES: 1) Types: feat, fix, docs, style, refactor, test, chore, ci, perf, build 2) Scope: use module/component name 3) Description: present tense, lowercase, no period, max 50 chars 4) Body: bullet points with past tense verbs (Added, Enhanced, Fixed, Updated, Implemented) 5) Always include 'Changed files:' section with file paths 6) Return ONLY the commit message, no explanations
+Example:
+feat(acompanhar-servicos): implement service code generation
+- Added service code generation using user patio code
+- Integrated service provisioning on button click
+- Used useServiceProvision and useUser from stores
+
+Changed files:
+- src/app/(app)/prestacao-servicos/acompanhar-servicos/page.tsx
+
+RULES:
+1) Types MUST be one of: feat, fix, docs, style, refactor, test, chore, ci, perf, build
+2) Scope MUST use module/component name in parentheses
+3) Description MUST be in present tense, lowercase, no period, max 50 chars
+4) Body MUST use bullet points with past tense verbs (Added, Enhanced, Fixed, Updated, Implemented)
+5) MUST include 'Changed files:' section with file paths
+6) Return ONLY the commit message, no explanations, no extra characters, no quotes
+7) CAREFULLY analyze the git diff to identify EXACTLY what was added, removed, or modified
+8) ONLY include changes that are actually present in the diff
+9) Pay close attention to the + and - symbols in the diff to accurately determine additions and removals
 
 Git diff:
+%s
+
+Changed files:
 %s`,
-		strings.Join(diff.Files, "\n- "),
-		diff.Content)
+		diff.Content,
+		strings.Join(diff.Files, "\n- "))
 
 	return prompt
 }
 
 // createPRPrompt creates a prompt for pull request description generation.
 func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
+	// Create a list of modified files with markdown formatting
+	modifiedFiles := ""
+	for _, file := range diff.Files {
+		modifiedFiles += fmt.Sprintf("- `%s`\n", file)
+	}
 	prompt := fmt.Sprintf(`You are a pull request description generator. Analyze the git diff and generate a clear, concise pull request description following this format EXACTLY:
 
 # [Title: Brief description of the main purpose of the changes - only capitalize the first letter of the sentence]
@@ -408,19 +435,16 @@ func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
 [A paragraph that provides an overview of the changes, including their purpose, scope, and impact. Explain what was improved, added, or fixed.]
 
 ### Key Changes
-- **[Category/Feature 1]:**
+- **Category/Feature 1:**
   - [Detailed bullet point about specific change]
   - [Detailed bullet point about specific change]
 
-- **[Category/Feature 2]:**
+- **Category/Feature 2:**
   - [Detailed bullet point about specific change]
   - [Detailed bullet point about specific change]
 
 ### Modified Files
-- [file path 1]
-- [file path 2]
-
-Git diff:
+<!-- The list below is automatically generated from the git diff -->
 %s
 
 RULES:
@@ -429,11 +453,15 @@ RULES:
 3) Do NOT include any text like "Here's the PR description" or "I've analyzed the diff"
 4) Return ONLY the PR description using the template format
 5) Do NOT add any signature, comments, or other text after the PR description
+6) CAREFULLY analyze the git diff to identify EXACTLY what was added, removed, or modified
+7) ONLY include changes that are actually present in the diff
+8) Pay close attention to the + and - symbols in the diff to accurately determine additions and removals
+9) Ensure each bullet point corresponds to a real change in the code
 
-Changed files:
-- %s`,
-		diff.Content,
-		strings.Join(diff.Files, "\n- "))
+Git diff:
+%s`,
+		modifiedFiles,
+		diff.Content)
 
 	return prompt
 }
