@@ -1,6 +1,16 @@
 # 🤖 Gommit - AI-Powered Git Commit Message Generator
 
-Gommit é uma ferramenta de linha de comando que usa inteligência artificial para gerar mensagens de commit do Git automaticamente, seguindo as melhores práticas e o formato Conventional Commits.
+Gommit é uma ferramenta de linha de comando que usa inteligência artificial para gerar mensagens de commit do Git automaticamente, seguindo as melhores práticas e o formato Conventional Commits. A ferramenta também oferece funcionalidades para geração de descrições de Pull Requests e validação de mensagens de commit.
+
+## ✨ Funcionalidades Principais
+
+- 🤖 **Geração Automática de Commits**: IA analisa suas mudanças e gera mensagens seguindo Conventional Commits
+- 📝 **Descrições de Pull Request**: Cria descrições detalhadas para seus PRs automaticamente
+- ✅ **Validação de Mensagens**: Verifica se suas mensagens seguem as melhores práticas
+- 🔧 **Configuração Flexível**: Suporte a múltiplos modelos de IA e configurações personalizadas
+- 🔐 **Armazenamento Seguro**: Chaves de API armazenadas com segurança no keyring do sistema
+- 🎯 **Interface Intuitiva**: CLI simples e fácil de usar com ajuda contextual
+- 🏗️ **Arquitetura Limpa**: Código bem estruturado seguindo Clean Architecture
 
 ## 🏗️ Arquitetura
 
@@ -10,9 +20,7 @@ Este projeto foi desenvolvido seguindo os princípios da **Clean Architecture**,
 
 ```
 gommit/
-├── cmd/
-│   └── gommit/
-│       └── main.go              # Ponto de entrada da aplicação
+├── main.go                      # Ponto de entrada da aplicação
 ├── pkg/
 │   ├── domain/                  # Camada de Domínio (regras de negócio)
 │   │   ├── entities/            # Entidades do domínio
@@ -26,7 +34,8 @@ gommit/
 │   │   └── usecases/            # Casos de uso (lógica de negócio)
 │   │       ├── commit_usecase.go
 │   │       ├── config_usecase.go
-│   │       └── generate_commit_usecase.go
+│   │       ├── generate_commit_usecase.go
+│   │       └── pull_request_usecase.go
 │   ├── infrastructure/          # Camada de Infraestrutura
 │   │   ├── config/              # Implementação de configuração
 │   │   │   ├── file_config_repository.go
@@ -37,13 +46,17 @@ gommit/
 │   │       └── openrouter_repository.go
 │   ├── application/             # Camada de Aplicação
 │   │   └── services/            # Serviços de aplicação
-│   │       ├── commit_service.go
-│   │       └── config_service.go
+│   │       ├── commit/          # Serviços de commit
+│   │       ├── config/          # Serviços de configuração
+│   │       └── pull-request/    # Serviços de pull request
 │   └── interfaces/              # Camada de Interface
 │       └── cli/                 # Interface de linha de comando
-│           ├── commands.go
-│           └── help.go
+│           ├── commands.go      # Processamento de comandos
+│           └── help.go          # Sistema de ajuda
 ├── go.mod                       # Dependências do Go
+├── go.sum                       # Checksums das dependências
+├── install.js                   # Script de instalação
+├── package.json                 # Configuração Node.js
 └── README.md                    # Este arquivo
 ```
 
@@ -107,16 +120,16 @@ go build -o gommit main.go
 
 ```bash
 # Gerar e fazer commit automaticamente
-./gommit
+./gommit commit --commit
 
 # Apenas gerar a mensagem (sem fazer commit)
-./gommit --no-commit
+./gommit commit --dry-run
 
 # Usar um modelo específico
-./gommit --model claude-3-haiku
+./gommit commit --model claude-3-sonnet
 
-# Verificar status do repositório
-./gommit status
+# Gerar descrição de Pull Request
+./gommit pr
 
 # Validar uma mensagem de commit
 ./gommit validate "feat: add new feature"
@@ -124,6 +137,18 @@ go build -o gommit main.go
 # Ver ajuda
 ./gommit help
 ```
+
+### 📖 Guia Completo de Uso
+
+Para instruções detalhadas, exemplos práticos e solução de problemas, consulte o **[Guia de Uso Completo](USAGE.md)**.
+
+O guia inclui:
+- Todos os comandos e opções disponíveis
+- Fluxos de trabalho recomendados
+- Exemplos práticos de uso
+- Configuração avançada
+- Solução de problemas comuns
+- Scripts de automação
 
 ## 📚 Guia de Aprendizado
 
@@ -190,6 +215,25 @@ go build -o gommit main.go
 5. **Aplicação**: Criar serviço em `pkg/application/services/`
 6. **Interface**: Adicionar comandos em `pkg/interfaces/cli/`
 
+## 📦 Dependências
+
+O projeto utiliza as seguintes dependências principais:
+
+- **github.com/99designs/keyring**: Armazenamento seguro de credenciais
+- **github.com/joho/godotenv**: Carregamento de variáveis de ambiente
+- **Go 1.24+**: Versão mínima do Go
+
+```bash
+# Instalar dependências
+go mod tidy
+
+# Verificar dependências
+go mod verify
+
+# Atualizar dependências
+go get -u ./...
+```
+
 ## 🧪 Testes (Futuro)
 
 A arquitetura facilita a criação de testes:
@@ -220,8 +264,11 @@ MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 ## 🙏 Agradecimentos
 
 - [OpenRouter](https://openrouter.ai/) pela API de IA
-- [Conventional Commits](https://www.conventionalcommits.org/) pelo padrão
-- Comunidade Go pelas melhores práticas
+- [Conventional Commits](https://www.conventionalcommits.org/) pelo padrão de mensagens
+- [99designs/keyring](https://github.com/99designs/keyring) pelo armazenamento seguro
+- [joho/godotenv](https://github.com/joho/godotenv) pelo gerenciamento de variáveis
+- Comunidade Go pelas melhores práticas e padrões de arquitetura
+- Clean Architecture por Robert C. Martin pelos princípios de design
 
 ---
 
