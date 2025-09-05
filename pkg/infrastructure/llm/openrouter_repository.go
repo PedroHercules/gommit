@@ -438,17 +438,8 @@ func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
   - [Detailed bullet point about specific change]
   - [Detailed bullet point about specific change]
 
-### Type of Changes
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] Performance improvement (non-breaking change which improves efficiency)
-- [ ] Code refactor (non-breaking change which improves code quality)
-- [ ] Documentation update (changes to documentation only)
-- [ ] Breaking change (fix or feature that would cause existing functionality to change)
-
 ### Modified Files
-- [file path 1]
-- [file path 2]
+- Add all modified files here
 
 Git diff:
 %s
