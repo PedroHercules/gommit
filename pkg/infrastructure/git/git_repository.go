@@ -61,7 +61,7 @@ func (r *CommandGitRepository) GetWorkingDiff() (*entities.GitDiff, error) {
 
 // GetDiffBetweenBranches returns the diff between two branches.
 func (r *CommandGitRepository) GetDiffBetweenBranches(branch1, branch2 string) (*entities.GitDiff, error) {
-	output, err := r.runGitCommand("diff", branch1, branch2)
+	output, err := r.runGitCommand("log", branch1+".."+branch2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff between branches: %w", err)
 	}

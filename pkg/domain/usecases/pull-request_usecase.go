@@ -43,7 +43,7 @@ func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest)
 	}
 
 	// Step 1: Pegar diferenças entre branch atual e branch base
-	diff, err := uc.gitRepo.GetDiffBetweenBranches("HEAD", req.BaseBranch)
+	diff, err := uc.gitRepo.GetDiffBetweenBranches(req.BaseBranch, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff: %w", err)
 	}
