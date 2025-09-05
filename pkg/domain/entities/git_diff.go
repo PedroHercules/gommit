@@ -51,16 +51,24 @@ func (g *GitDiff) parseFiles() {
 		// Look for diff --git lines or +++ lines to identify files
 		if strings.HasPrefix(line, "diff --git") {
 			// Extract file path from "diff --git a/file b/file"
-			parts := strings.Fields(line)
-			if len(parts) >= 4 {
-				filePath := strings.TrimPrefix(parts[3], "b/")
-				files[filePath] = true
+			// Format is typically: diff --git a/path/to/file b/path/to/file
+			// We need to find the b/ part which may contain spaces
+			parts := strings.SplitN(line, " a/", 2)
+			if len(parts) == 2 {
+				// Now parts[1] contains: path/to/file b/path/to/file
+				// Split at the first occurrence of " b/"
+				fileParts := strings.SplitN(parts[1], " b/", 2)
+				if len(fileParts) == 2 {
+					// fileParts[1] now contains the full path
+					files[fileParts[1]] = true
+				}
 			}
 		} else if strings.HasPrefix(line, "+++") && !strings.Contains(line, "/dev/null") {
 			// Extract file path from "+++ b/file"
-			filePath := strings.TrimPrefix(strings.TrimSpace(line[3:]), "b/")
-			if filePath != "" {
-				files[filePath] = true
+			// Handle the case where the path might contain spaces
+			parts := strings.SplitN(line, "+++ b/", 2)
+			if len(parts) == 2 && parts[1] != "" {
+				files[parts[1]] = true
 			}
 		}
 	}
