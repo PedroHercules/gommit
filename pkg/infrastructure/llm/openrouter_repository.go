@@ -409,19 +409,24 @@ RULES:
 8) ONLY include changes that are actually present in the diff
 9) Pay close attention to the + and - symbols in the diff to accurately determine additions and removals
 
-Changed files:
-- %s
-
 Git diff:
+%s
+
+Changed files:
 %s`,
-		strings.Join(diff.Files, "\n- "),
-		diff.Content)
+		diff.Content,
+		strings.Join(diff.Files, "\n- "))
 
 	return prompt
 }
 
 // createPRPrompt creates a prompt for pull request description generation.
 func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
+	// Create a list of modified files with markdown formatting
+	modifiedFiles := ""
+	for _, file := range diff.Files {
+		modifiedFiles += fmt.Sprintf("- `%s`\n", file)
+	}
 	prompt := fmt.Sprintf(`You are a pull request description generator. Analyze the git diff and generate a clear, concise pull request description following this format EXACTLY:
 
 # [Title: Brief description of the main purpose of the changes - only capitalize the first letter of the sentence]
@@ -439,9 +444,7 @@ func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
   - [Detailed bullet point about specific change]
 
 ### Modified Files
-- Add all modified files here
-
-Git diff:
+<!-- The list below is automatically generated from the git diff -->
 %s
 
 RULES:
@@ -455,10 +458,10 @@ RULES:
 8) Pay close attention to the + and - symbols in the diff to accurately determine additions and removals
 9) Ensure each bullet point corresponds to a real change in the code
 
-Changed files:
-- %s`,
-		diff.Content,
-		strings.Join(diff.Files, "\n- "))
+Git diff:
+%s`,
+		modifiedFiles,
+		diff.Content)
 
 	return prompt
 }
