@@ -1,18 +1,18 @@
-# 🤖 Gommit - AI-Powered Git Commit Message Generator
+# Gommit - AI-Powered Git Commit Message Generator
 
 Gommit é uma ferramenta de linha de comando que usa inteligência artificial para gerar mensagens de commit do Git automaticamente, seguindo as melhores práticas e o formato Conventional Commits. A ferramenta também oferece funcionalidades para geração de descrições de Pull Requests e validação de mensagens de commit.
 
-## ✨ Funcionalidades Principais
+## Funcionalidades Principais
 
-- 🤖 **Geração Automática de Commits**: IA analisa suas mudanças e gera mensagens seguindo Conventional Commits
-- 📝 **Descrições de Pull Request**: Cria descrições detalhadas para seus PRs automaticamente
-- ✅ **Validação de Mensagens**: Verifica se suas mensagens seguem as melhores práticas
-- 🔧 **Configuração Flexível**: Suporte a múltiplos modelos de IA e configurações personalizadas
-- 🔐 **Armazenamento Seguro**: Chaves de API armazenadas com segurança no keyring do sistema
-- 🎯 **Interface Intuitiva**: CLI simples e fácil de usar com ajuda contextual
-- 🏗️ **Arquitetura Limpa**: Código bem estruturado seguindo Clean Architecture
+- **Geração Automática de Commits**: IA analisa suas mudanças e gera mensagens seguindo Conventional Commits
+- **Descrições de Pull Request**: Cria descrições detalhadas para seus PRs automaticamente
+- **Validação de Mensagens**: Verifica se suas mensagens seguem as melhores práticas
+- **Configuração Flexível**: Suporte a múltiplos modelos de IA e configurações personalizadas
+- **Armazenamento Seguro**: Chaves de API armazenadas com segurança no keyring do sistema
+- **Interface Intuitiva**: CLI simples e fácil de usar com ajuda contextual
+- **Arquitetura Limpa**: Código bem estruturado seguindo Clean Architecture
 
-## 🏗️ Arquitetura
+## Arquitetura
 
 Este projeto foi desenvolvido seguindo os princípios da **Clean Architecture**, proporcionando uma estrutura limpa, testável e fácil de manter. É ideal para aprender Go e padrões de arquitetura de software.
 
@@ -60,7 +60,7 @@ gommit/
 └── README.md                    # Este arquivo
 ```
 
-### 🎯 Princípios da Clean Architecture
+### Princípios da Clean Architecture
 
 #### 1. **Camada de Domínio** (`pkg/domain/`)
 - **Entidades**: Objetos de negócio fundamentais (`Commit`, `Config`, `GitDiff`)
@@ -138,7 +138,7 @@ go build -o gommit main.go
 ./gommit help
 ```
 
-### 📖 Guia Completo de Uso
+### Guia Completo de Uso
 
 Para instruções detalhadas, exemplos práticos e solução de problemas, consulte o **[Guia de Uso Completo](USAGE.md)**.
 
@@ -174,7 +174,7 @@ O guia inclui:
    - Manual DI em `main.go`
    - Inversão de controle
 
-### 🔍 Pontos de Estudo
+### Pontos de Estudo
 
 #### Iniciante
 1. **Entidades** (`pkg/domain/entities/`)
@@ -204,7 +204,7 @@ O guia inclui:
    - Processamento de argumentos
    - Interface do usuário
 
-### 🛠️ Como Adicionar Novas Funcionalidades
+### Como Adicionar Novas Funcionalidades
 
 #### Exemplo: Adicionar Suporte a Templates
 
@@ -215,7 +215,7 @@ O guia inclui:
 5. **Aplicação**: Criar serviço em `pkg/application/services/`
 6. **Interface**: Adicionar comandos em `pkg/interfaces/cli/`
 
-## 📦 Dependências
+## Dependências
 
 O projeto utiliza as seguintes dependências principais:
 
@@ -234,7 +234,7 @@ go mod verify
 go get -u ./...
 ```
 
-## 🧪 Testes (Futuro)
+## Testes (Futuro)
 
 A arquitetura facilita a criação de testes:
 
@@ -261,7 +261,7 @@ go test ./pkg/interfaces/...
 
 MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
-## 🙏 Agradecimentos
+## Agradecimentos
 
 - [OpenRouter](https://openrouter.ai/) pela API de IA
 - [Conventional Commits](https://www.conventionalcommits.org/) pelo padrão de mensagens
@@ -272,4 +272,4 @@ MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
 
 ---
 
-**Desenvolvido com ❤️ para aprender Go e Clean Architecture**
+**Desenvolvido para aprender Go e Clean Architecture**

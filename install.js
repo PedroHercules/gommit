@@ -99,14 +99,14 @@ async function install() {
       fs.chmodSync(binaryPath, '755');
     }
     
-    console.log('✅ gommit installed successfully!');
+    console.log('gommit installed successfully!');
     console.log('\nUsage:');
     console.log('  gommit commit          # Generate commit message');
     console.log('  gommit config set-key  # Set OpenRouter API key');
     console.log('  gommit --help          # Show help');
     
   } catch (error) {
-    console.error('❌ Installation failed:', error.message);
+    console.error('Installation failed:', error.message);
     console.error('\nPlease try:');
     console.error('1. Check your internet connection');
     console.error('2. Verify the release exists on GitHub');

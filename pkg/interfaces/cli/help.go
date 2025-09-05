@@ -5,7 +5,7 @@ import "fmt"
 // showHelp displays the main help message.
 func (c *CLI) showHelp() error {
 	fmt.Println(`
-🤖 Gommit - AI-Powered Git Commit Message Generator
+Gommit - AI-Powered Git Commit Message Generator
 
 USAGE:
     gommit [COMMAND] [OPTIONS]
@@ -56,7 +56,7 @@ For more information, visit: https://github.com/PedroHercules/gommit`)
 // showConfigHelp displays help for config commands.
 func (c *CLI) showConfigHelp() error {
 	fmt.Println(`
-⚙️ Gommit Configuration Commands
+Gommit Configuration Commands
 
 USAGE:
     gommit config <COMMAND> [OPTIONS]
@@ -91,7 +91,7 @@ NOTES:
 // showVersion displays version information.
 func (c *CLI) showVersion() error {
 	fmt.Println(`
-🤖 Gommit v1.0.0
+Gommit v1.0.0
 
 AI-Powered Git Commit Message Generator
 
