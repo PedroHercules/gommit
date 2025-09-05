@@ -405,6 +405,9 @@ RULES:
 4) Body MUST use bullet points with past tense verbs (Added, Enhanced, Fixed, Updated, Implemented)
 5) MUST include 'Changed files:' section with file paths
 6) Return ONLY the commit message, no explanations, no extra characters, no quotes
+7) CAREFULLY analyze the git diff to identify EXACTLY what was added, removed, or modified
+8) ONLY include changes that are actually present in the diff
+9) Pay close attention to the + and - symbols in the diff to accurately determine additions and removals
 
 Changed files:
 - %s
@@ -448,6 +451,10 @@ RULES:
 3) Do NOT include any text like "Here's the PR description" or "I've analyzed the diff"
 4) Return ONLY the PR description using the template format
 5) Do NOT add any signature, comments, or other text after the PR description
+6) CAREFULLY analyze the git diff to identify EXACTLY what was added, removed, or modified
+7) ONLY include changes that are actually present in the diff
+8) Pay close attention to the + and - symbols in the diff to accurately determine additions and removals
+9) Ensure each bullet point corresponds to a real change in the code
 
 Changed files:
 - %s`,
