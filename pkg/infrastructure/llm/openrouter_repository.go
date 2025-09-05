@@ -379,16 +379,35 @@ func (r *OpenRouterRepository) GetModelInfo(modelID string) (*repositories.LLMMo
 
 // createCommitPrompt creates a prompt for commit message generation.
 func (r *OpenRouterRepository) createCommitPrompt(diff *entities.GitDiff) string {
-	prompt := fmt.Sprintf(`You are a commit message generator following Conventional Commits specification. Analyze the git diff and generate ONLY a commit message. STRICT FORMAT: type(scope): description
+	prompt := fmt.Sprintf(`You are a commit message generator following Conventional Commits specification. Analyze the git diff and generate ONLY a commit message that follows EXACTLY this format:
 
-- List of changes in bullet points
-- Each bullet explains what was added/changed/fixed
-- Use past tense for changes (Added, Enhanced, Fixed, etc.)
+type(scope): description
+- Bullet point explaining what was added/changed/fixed in past tense
+- Bullet point explaining what was added/changed/fixed in past tense
+- Bullet point explaining what was added/changed/fixed in past tense
+
+Changed files:
+- file/path.ext
+
+Example:
+feat(acompanhar-servicos): implement service code generation
+- Added service code generation using user patio code
+- Integrated service provisioning on button click
+- Used useServiceProvision and useUser from stores
+
+Changed files:
+- src/app/(app)/prestacao-servicos/acompanhar-servicos/page.tsx
+
+RULES:
+1) Types MUST be one of: feat, fix, docs, style, refactor, test, chore, ci, perf, build
+2) Scope MUST use module/component name in parentheses
+3) Description MUST be in present tense, lowercase, no period, max 50 chars
+4) Body MUST use bullet points with past tense verbs (Added, Enhanced, Fixed, Updated, Implemented)
+5) MUST include 'Changed files:' section with file paths
+6) Return ONLY the commit message, no explanations, no extra characters, no quotes
 
 Changed files:
 - %s
-
-RULES: 1) Types: feat, fix, docs, style, refactor, test, chore, ci, perf, build 2) Scope: use module/component name 3) Description: present tense, lowercase, no period, max 50 chars 4) Body: bullet points with past tense verbs (Added, Enhanced, Fixed, Updated, Implemented) 5) Always include 'Changed files:' section with file paths 6) Return ONLY the commit message, no explanations
 
 Git diff:
 %s`,
