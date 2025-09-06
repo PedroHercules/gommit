@@ -1,277 +1,278 @@
-# Gommit - AI-Powered Git Commit Message Generator
+# Gmit - AI-Powered Git Commit Message & Pull Request Generator
 
-Gommit é uma ferramenta de linha de comando que usa inteligência artificial para gerar mensagens de commit do Git automaticamente, seguindo as melhores práticas e o formato Conventional Commits. A ferramenta também oferece funcionalidades para geração de descrições de Pull Requests e validação de mensagens de commit.
+Gmit is a command-line tool that uses artificial intelligence to automatically generate Git commit messages and Pull Request descriptions, following best practices and the Conventional Commits format. The tool also provides functionality for commit message validation and flexible AI model configuration.
 
-## Funcionalidades Principais
+## Key Features
 
-- **Geração Automática de Commits**: IA analisa suas mudanças e gera mensagens seguindo Conventional Commits
-- **Descrições de Pull Request**: Cria descrições detalhadas para seus PRs automaticamente
-- **Validação de Mensagens**: Verifica se suas mensagens seguem as melhores práticas
-- **Configuração Flexível**: Suporte a múltiplos modelos de IA e configurações personalizadas
-- **Armazenamento Seguro**: Chaves de API armazenadas com segurança no keyring do sistema
-- **Interface Intuitiva**: CLI simples e fácil de usar com ajuda contextual
-- **Arquitetura Limpa**: Código bem estruturado seguindo Clean Architecture
+- **Automatic Commit Generation**: AI analyzes your changes and generates messages following Conventional Commits
+- **Pull Request Descriptions**: Creates detailed descriptions for your PRs automatically with smart branch comparison
+- **Message Validation**: Verifies that your messages follow best practices
+- **Flexible Configuration**: Support for multiple AI models and custom configurations
+- **Secure Storage**: API keys stored securely in the system keyring
+- **Intuitive Interface**: Simple and easy-to-use CLI with contextual help
+- **Cross-Platform**: Works on Windows, macOS, and Linux
 
-## Arquitetura
+## 🚀 Installation
 
-Este projeto foi desenvolvido seguindo os princípios da **Clean Architecture**, proporcionando uma estrutura limpa, testável e fácil de manter. É ideal para aprender Go e padrões de arquitetura de software.
+### Via NPM (Recommended)
 
-### 📁 Estrutura do Projeto
+```bash
+npm install -g gmit
+```
+
+### Manual Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/PedroHercules/gommit.git
+cd gommit
+
+# Install dependencies
+go mod tidy
+
+# Build the project
+go build -o gmit main.go
+```
+
+## Configuration
+
+```bash
+# Configure your OpenRouter API key
+gmit config set-key sk-or-v1-your-key-here
+
+# (Optional) Set a default model
+gmit config set-model claude-3-sonnet
+
+# Check configuration
+gmit config summary
+```
+
+## Usage
+
+### Commit Generation
+
+```bash
+# Generate and commit automatically
+gmit commit --commit
+
+# Only generate the message (dry run)
+gmit commit --dry-run
+
+# Use a specific model
+gmit commit --model claude-3-sonnet
+
+# Interactive mode with confirmation
+gmit commit
+```
+
+### Pull Request Generation
+
+The PR functionality is one of Gmit's most powerful features, providing intelligent analysis of your branch changes:
+
+```bash
+# Generate PR description for current branch
+gmit pr
+
+# Generate PR comparing with specific base branch
+gmit pr --base-branch develop
+
+# Generate PR with custom target branch
+gmit pr --base-branch main
+
+# Use specific AI model for PR generation
+gmit pr --model claude-3-haiku --base-branch develop
+```
+
+#### How PR Generation Works
+
+1. **Branch Analysis**: Gmit automatically detects your current branch and compares it with the target branch (default: main)
+2. **Commit History**: Analyzes all commits between your branch and the base branch
+3. **Code Changes**: Reviews the actual code differences (git diff)
+4. **Smart Summarization**: Uses AI to create a comprehensive PR description including:
+   - Clear title following conventional commit format
+   - Detailed description of changes
+   - List of modified files and their purposes
+   - Breaking changes (if any)
+   - Testing recommendations
+
+#### PR Description Format
+
+Generated PR descriptions follow this structure:
+
+```markdown
+## Description
+[AI-generated summary of changes]
+
+## Changes Made
+- [List of key changes]
+- [Feature additions]
+- [Bug fixes]
+
+## Files Modified
+- `file1.go` - [Purpose of changes]
+- `file2.js` - [What was modified]
+
+## Breaking Changes
+[If applicable]
+
+## Testing
+[Suggested testing approach]
+```
+
+### Other Commands
+
+```bash
+# Validate a commit message
+gmit validate "feat: add new feature"
+
+# Show help
+gmit help
+
+# Show version
+gmit version
+
+# Configuration management
+gmit config help
+```
+
+## Architecture
+
+This project follows **Clean Architecture** principles, providing a clean, testable, and maintainable structure. It's ideal for learning Go and software architecture patterns.
+
+### 📁 Project Structure
 
 ```
-gommit/
-├── main.go                      # Ponto de entrada da aplicação
+gmit/
+├── main.go                      # Application entry point
 ├── pkg/
-│   ├── domain/                  # Camada de Domínio (regras de negócio)
-│   │   ├── entities/            # Entidades do domínio
-│   │   │   ├── commit.go        # Entidade Commit
-│   │   │   ├── config.go        # Entidade Config
-│   │   │   └── git_diff.go      # Entidade GitDiff
-│   │   ├── repositories/        # Interfaces dos repositórios
+│   ├── domain/                  # Domain Layer (business rules)
+│   │   ├── entities/            # Domain entities
+│   │   │   ├── commit.go        # Commit entity
+│   │   │   ├── config.go        # Config entity
+│   │   │   └── git_diff.go      # GitDiff entity
+│   │   ├── repositories/        # Repository interfaces
 │   │   │   ├── config_repository.go
 │   │   │   ├── git_repository.go
 │   │   │   └── llm_repository.go
-│   │   └── usecases/            # Casos de uso (lógica de negócio)
+│   │   └── usecases/            # Use cases (business logic)
 │   │       ├── commit_usecase.go
 │   │       ├── config_usecase.go
 │   │       ├── generate_commit_usecase.go
 │   │       └── pull_request_usecase.go
-│   ├── infrastructure/          # Camada de Infraestrutura
-│   │   ├── config/              # Implementação de configuração
+│   ├── infrastructure/          # Infrastructure Layer
+│   │   ├── config/              # Configuration implementation
 │   │   │   ├── file_config_repository.go
 │   │   │   └── keyring_service.go
-│   │   ├── git/                 # Implementação Git
+│   │   ├── git/                 # Git implementation
 │   │   │   └── git_repository.go
-│   │   └── llm/                 # Implementação LLM
+│   │   └── llm/                 # LLM implementation
 │   │       └── openrouter_repository.go
-│   ├── application/             # Camada de Aplicação
-│   │   └── services/            # Serviços de aplicação
-│   │       ├── commit/          # Serviços de commit
-│   │       ├── config/          # Serviços de configuração
-│   │       └── pull-request/    # Serviços de pull request
-│   └── interfaces/              # Camada de Interface
-│       └── cli/                 # Interface de linha de comando
-│           ├── commands.go      # Processamento de comandos
-│           └── help.go          # Sistema de ajuda
-├── go.mod                       # Dependências do Go
-├── go.sum                       # Checksums das dependências
-├── install.js                   # Script de instalação
-├── package.json                 # Configuração Node.js
-└── README.md                    # Este arquivo
+│   ├── application/             # Application Layer
+│   │   └── services/            # Application services
+│   │       ├── commit/          # Commit services
+│   │       ├── config/          # Configuration services
+│   │       └── pull-request/    # Pull request services
+│   └── interfaces/              # Interface Layer
+│       └── cli/                 # Command line interface
+│           ├── commands.go      # Command processing
+│           └── help.go          # Help system
+├── bin/                         # Compiled binaries
+├── install.js                   # Installation script
+├── package.json                 # Node.js configuration
+└── README.md                    # This file
 ```
 
-### Princípios da Clean Architecture
+## Dependencies
 
-#### 1. **Camada de Domínio** (`pkg/domain/`)
+The project uses the following main dependencies:
 
-- **Entidades**: Objetos de negócio fundamentais (`Commit`, `Config`, `GitDiff`)
-- **Repositórios**: Interfaces que definem como acessar dados
-- **Casos de Uso**: Lógica de negócio pura, independente de frameworks
-
-#### 2. **Camada de Infraestrutura** (`pkg/infrastructure/`)
-
-- **Implementações**: Código que interage com sistemas externos
-- **Git**: Comandos Git via CLI
-- **LLM**: Integração com APIs de IA (OpenRouter)
-- **Config**: Armazenamento de configurações e credenciais
-
-#### 3. **Camada de Aplicação** (`pkg/application/`)
-
-- **Serviços**: Orquestram casos de uso e coordenam operações
-- **Fluxo**: Conectam a interface do usuário com a lógica de negócio
-
-#### 4. **Camada de Interface** (`pkg/interfaces/`)
-
-- **CLI**: Interface de linha de comando
-- **Entrada**: Processa comandos do usuário
-- **Saída**: Apresenta resultados formatados
-
-## 🚀 Instalação e Uso
-
-### Pré-requisitos
-
-- Go 1.21 ou superior
-- Git instalado e configurado
-- Chave de API do OpenRouter
-
-### Instalação
+- **github.com/99designs/keyring**: Secure credential storage
+- **github.com/joho/godotenv**: Environment variable loading
+- **Go 1.21+**: Minimum Go version
 
 ```bash
-# Clone o repositório
-git clone https://github.com/PedroHercules/gommit.git
-cd gommit
-
-# Instale as dependências
+# Install dependencies
 go mod tidy
 
-# Compile o projeto
-go build -o gommit main.go
-```
-
-### Configuração
-
-```bash
-# Configure sua chave de API do OpenRouter
-./gommit config set-key sk-or-v1-sua-chave-aqui
-
-# (Opcional) Configure um modelo padrão
-./gommit config set-model claude-3-sonnet
-
-# Verifique a configuração
-./gommit config summary
-```
-
-### Uso Básico
-
-```bash
-# Gerar e fazer commit automaticamente
-./gommit commit --commit
-
-# Apenas gerar a mensagem (sem fazer commit)
-./gommit commit --dry-run
-
-# Usar um modelo específico
-./gommit commit --model claude-3-sonnet
-
-# Gerar descrição de Pull Request
-./gommit pr
-
-# Gerar PR comparando com branch específica
-./gommit pr --base-branch develop
-
-# Validar uma mensagem de commit
-./gommit validate "feat: add new feature"
-
-# Ver ajuda
-./gommit help
-```
-
-## 📚 Guia de Aprendizado
-
-### 🎓 Conceitos de Go Demonstrados
-
-1. **Interfaces e Polimorfismo**
-
-   - Veja `pkg/domain/repositories/` para interfaces bem definidas
-   - Implementações em `pkg/infrastructure/`
-
-2. **Estruturas e Métodos**
-
-   - Entidades em `pkg/domain/entities/`
-   - Métodos de validação e transformação
-
-3. **Tratamento de Erros**
-
-   - Padrão Go de retorno de erro
-   - Wrapping de erros com contexto
-
-4. **Organização de Pacotes**
-
-   - Separação clara de responsabilidades
-   - Imports bem organizados
-
-5. **Injeção de Dependências**
-   - Manual DI em `main.go`
-   - Inversão de controle
-
-### Pontos de Estudo
-
-#### Iniciante
-
-1. **Entidades** (`pkg/domain/entities/`)
-
-   - Como definir estruturas
-   - Métodos de validação
-   - Construtores
-
-2. **Interfaces** (`pkg/domain/repositories/`)
-   - Definição de contratos
-   - Desacoplamento
-
-#### Intermediário
-
-3. **Casos de Uso** (`pkg/domain/usecases/`)
-
-   - Lógica de negócio
-   - Orquestração de operações
-
-4. **Implementações** (`pkg/infrastructure/`)
-   - Integração com sistemas externos
-   - Tratamento de erros
-
-#### Avançado
-
-5. **Serviços** (`pkg/application/services/`)
-
-   - Coordenação de casos de uso
-   - Transformação de dados
-
-6. **CLI** (`pkg/interfaces/cli/`)
-   - Processamento de argumentos
-   - Interface do usuário
-
-### Como Adicionar Novas Funcionalidades
-
-#### Exemplo: Adicionar Suporte a Templates
-
-1. **Domínio**: Criar entidade `Template` em `pkg/domain/entities/`
-2. **Repositório**: Definir interface em `pkg/domain/repositories/`
-3. **Caso de Uso**: Implementar lógica em `pkg/domain/usecases/`
-4. **Infraestrutura**: Implementar persistência em `pkg/infrastructure/`
-5. **Aplicação**: Criar serviço em `pkg/application/services/`
-6. **Interface**: Adicionar comandos em `pkg/interfaces/cli/`
-
-## Dependências
-
-O projeto utiliza as seguintes dependências principais:
-
-- **github.com/99designs/keyring**: Armazenamento seguro de credenciais
-- **github.com/joho/godotenv**: Carregamento de variáveis de ambiente
-- **Go 1.24+**: Versão mínima do Go
-
-```bash
-# Instalar dependências
-go mod tidy
-
-# Verificar dependências
+# Verify dependencies
 go mod verify
 
-# Atualizar dependências
+# Update dependencies
 go get -u ./...
 ```
 
-## Testes (Futuro)
+## Supported AI Models
 
-A arquitetura facilita a criação de testes:
+Gmit supports various AI models through OpenRouter:
+
+- **Claude 3 Sonnet** (recommended for quality)
+- **Claude 3 Haiku** (faster, cost-effective)
+- **GPT-4** (OpenAI)
+- **GPT-3.5 Turbo** (faster alternative)
+- And many more available through OpenRouter
+
+## Examples
+
+### Commit Message Examples
 
 ```bash
-# Testes unitários (domínio)
-go test ./pkg/domain/...
+# For a new feature
+gmit commit
+# Output: "feat: add user authentication system"
 
-# Testes de integração (infraestrutura)
-go test ./pkg/infrastructure/...
+# For a bug fix
+gmit commit
+# Output: "fix: resolve memory leak in data processing"
 
-# Testes end-to-end (CLI)
-go test ./pkg/interfaces/...
+# For documentation
+gmit commit
+# Output: "docs: update API documentation with new endpoints"
 ```
 
-## 🤝 Contribuindo
+### Pull Request Examples
 
-1. Fork o projeto
-2. Crie uma branch para sua feature (`git checkout -b feature/nova-funcionalidade`)
-3. Commit suas mudanças (`git commit -am 'feat: adiciona nova funcionalidade'`)
-4. Push para a branch (`git push origin feature/nova-funcionalidade`)
-5. Abra um Pull Request
+```bash
+# Feature branch to main
+gmit pr
+# Generates comprehensive PR description with:
+# - Feature overview
+# - Implementation details
+# - Files changed
+# - Testing suggestions
 
-## 📄 Licença
+# Hotfix branch to develop
+gmit pr --base-branch develop
+# Focuses on bug fixes and urgent changes
+```
 
-MIT License - veja o arquivo [LICENSE](LICENSE) para detalhes.
+## 🤝 Contributing
 
-## Agradecimentos
+1. Fork the project
+2. Create a feature branch (`git checkout -b feature/new-feature`)
+3. Commit your changes (`git commit -am 'feat: add new feature'`)
+4. Push to the branch (`git push origin feature/new-feature`)
+5. Open a Pull Request
 
-- [OpenRouter](https://openrouter.ai/) pela API de IA
-- [Conventional Commits](https://www.conventionalcommits.org/) pelo padrão de mensagens
-- [99designs/keyring](https://github.com/99designs/keyring) pelo armazenamento seguro
-- [joho/godotenv](https://github.com/joho/godotenv) pelo gerenciamento de variáveis
-- Comunidade Go pelas melhores práticas e padrões de arquitetura
-- Clean Architecture por Robert C. Martin pelos princípios de design
+## 📄 License
+
+MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [OpenRouter](https://openrouter.ai/) for the AI API
+- [Conventional Commits](https://www.conventionalcommits.org/) for the message format standard
+- [99designs/keyring](https://github.com/99designs/keyring) for secure storage
+- [joho/godotenv](https://github.com/joho/godotenv) for environment management
+- Go community for best practices and architecture patterns
+
+## Support
+
+If you encounter any issues or have questions:
+
+1. Check the [Issues](https://github.com/PedroHercules/gommit/issues) page
+2. Create a new issue with detailed information
+3. Use `gmit help` for command-specific help
+
+---
+
+**Made with ❤️ by Pedro Hercules**
