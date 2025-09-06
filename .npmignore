@@ -1,0 +1,49 @@
+# Development files
+.git/
+.gitignore
+*.log
+*.tmp
+*.temp
+
+# Go source files (only binaries are needed)
+*.go
+go.mod
+go.sum
+pkg/
+main.go
+
+# Documentation and config files not needed for NPM
+CONFIG.md
+.vscode/
+.idea/
+
+# Test files
+*_test.go
+*test*
+
+# Build artifacts
+*.exe
+*.o
+*.a
+*.so
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Node modules (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Keep only necessary files for NPM package
+# bin/ folder is included via package.json files array
+# install.js is included
+# README.md is included
+# LICENSE is included (if exists)

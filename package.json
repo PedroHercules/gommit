@@ -1,10 +1,10 @@
 {
-  "name": "gommit",
+  "name": "gmit",
   "version": "1.0.0",
   "description": "AI-powered Git commit message generator using OpenRouter LLM models",
-  "main": "index.js",
+  "main": "install.js",
   "bin": {
-    "gommit": "./bin/gommit"
+    "gmit": "./gmit.js"
   },
   "scripts": {
     "postinstall": "node install.js",
@@ -45,6 +45,8 @@
   "files": [
     "bin/",
     "install.js",
-    "README.md"
-  ]
+    "README.md",
+    "LICENSE"
+  ],
+  "preferGlobal": true
 }

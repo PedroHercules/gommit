@@ -104,7 +104,6 @@ AI-Powered Git Commit Message Generator
 Built with:
     • Go 1.21+
     • OpenRouter API
-    • Clean Architecture
 
 Author: Pedro Hercules
 License: MIT

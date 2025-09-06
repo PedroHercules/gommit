@@ -1,10 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
-const { execSync } = require('child_process');
-
-const GITHUB_REPO = 'PedroHercules/gommit';
-const VERSION = require('./package.json').version;
 
 function getPlatform() {
   const platform = process.platform;
@@ -43,74 +38,46 @@ function getPlatform() {
   return { osName, archName, ext };
 }
 
-function downloadFile(url, dest) {
-  return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    
-    https.get(url, (response) => {
-      if (response.statusCode === 302 || response.statusCode === 301) {
-        // Handle redirect
-        return downloadFile(response.headers.location, dest).then(resolve).catch(reject);
-      }
-      
-      if (response.statusCode !== 200) {
-        reject(new Error(`Failed to download: ${response.statusCode}`));
-        return;
-      }
-      
-      response.pipe(file);
-      
-      file.on('finish', () => {
-        file.close();
-        resolve();
-      });
-      
-      file.on('error', (err) => {
-        fs.unlink(dest, () => {});
-        reject(err);
-      });
-    }).on('error', (err) => {
-      reject(err);
-    });
-  });
-}
+
 
 async function install() {
   try {
-    console.log('Installing gommit...');
+    console.log('Installing gmit...');
     
     const { osName, archName, ext } = getPlatform();
-    const binaryName = `gommit-${osName}-${archName}${ext}`;
-    const downloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/v${VERSION}/${binaryName}`;
+    const sourceBinaryName = `gmit-${osName}-${archName}${ext}`;
+    const targetBinaryName = `gommit${ext}`;
     
-    // Create bin directory
     const binDir = path.join(__dirname, 'bin');
-    if (!fs.existsSync(binDir)) {
-      fs.mkdirSync(binDir, { recursive: true });
+    const sourceBinaryPath = path.join(binDir, sourceBinaryName);
+    const targetBinaryPath = path.join(binDir, 'gmit');
+    
+    // Check if the platform-specific binary exists
+    if (!fs.existsSync(sourceBinaryPath)) {
+      throw new Error(`Binary not found for platform ${osName}-${archName}. Available binaries: ${fs.readdirSync(binDir).join(', ')}`);
     }
     
-    const binaryPath = path.join(binDir, `gommit${ext}`);
-    
-    console.log(`Downloading ${downloadUrl}...`);
-    await downloadFile(downloadUrl, binaryPath);
+    // Copy the platform-specific binary to the generic name
+    console.log(`Setting up binary for ${osName}-${archName}...`);
+    fs.copyFileSync(sourceBinaryPath, targetBinaryPath);
     
     // Make executable on Unix systems
     if (process.platform !== 'win32') {
-      fs.chmodSync(binaryPath, '755');
+      fs.chmodSync(targetBinaryPath, '755');
     }
     
-    console.log('gommit installed successfully!');
+    console.log('gmit installed successfully!');
     console.log('\nUsage:');
-    console.log('  gommit commit          # Generate commit message');
-    console.log('  gommit config set-key  # Set OpenRouter API key');
-    console.log('  gommit --help          # Show help');
+    console.log('  gmit commit          # Generate commit message');
+    console.log('  gmit config set-key  # Set OpenRouter API key');
+    console.log('  gmit --help          # Show help');
     
   } catch (error) {
     console.error('Installation failed:', error.message);
     console.error('\nPlease try:');
-    console.error('1. Check your internet connection');
-    console.error('2. Verify the release exists on GitHub');
-    console.error('3. Install manually from: https://github.com/' + GITHUB_REPO + '/releases');
+    console.error('1. Check if the binary exists for your platform');
+    console.error('2. Verify your system architecture is supported');
+    console.error('3. Install manually from: https://github.com/PedroHercules/gommit/releases');
     process.exit(1);
   }
 }
