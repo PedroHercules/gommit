@@ -104,14 +104,10 @@ func (r *OpenRouterRepository) GenerateCommitMessage(diff *entities.GitDiff, mod
 	// Create the prompt for commit message generation
 	prompt := r.createCommitPrompt(diff)
 
-	// Prepare the request
+	// Prepare the request - using only user message to avoid "developer instruction" issues
 	request := openRouterRequest{
 		Model: modelToUse,
 		Messages: []openRouterMessage{
-			{
-				Role:    "system",
-				Content: "You are an expert developer who writes clear, concise commit messages following conventional commits format. Generate a commit message based on the provided git diff.",
-			},
 			{
 				Role:    "user",
 				Content: prompt,
@@ -236,52 +232,22 @@ func (r *OpenRouterRepository) GeneratePRDescription(diff *entities.GitDiff, mod
 
 // GetAvailableModels returns a list of available LLM models.
 func (r *OpenRouterRepository) GetAvailableModels() ([]repositories.LLMModel, error) {
-	// Return cached models if available
-	if len(r.models) > 0 {
-		return r.models, nil
-	}
-
-	// Fetch models from API
-	req, err := http.NewRequest("GET", r.baseURL+"/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+r.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := r.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch models: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var modelsResp openRouterModelsResponse
-	if err := json.Unmarshal(body, &modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to parse models response: %w", err)
-	}
-
-	// Convert to our model format
-	models := make([]repositories.LLMModel, 0, len(modelsResp.Data))
-	for _, model := range modelsResp.Data {
-		// Extract provider from model ID
-		provider := "Unknown"
-		if parts := strings.Split(model.ID, "/"); len(parts) > 0 {
-			provider = strings.Title(parts[0])
-		}
-
-		models = append(models, repositories.LLMModel{
-			ID:          model.ID,
-			Name:        model.Name,
-			Provider:    provider,
-			ContextSize: model.Context,
+	// Return predefined models - fastest first
+	models := []repositories.LLMModel{
+		{
+			ID:          "meta-llama/llama-3.2-3b-instruct:free",
+			Name:        "Meta Llama 3.2 3B Instruct (Free)",
+			Provider:    "Meta",
+			ContextSize: 131072,
 			Available:   true,
-		})
+		},
+		{
+			ID:          "deepseek/deepseek-chat-v3.1:free",
+			Name:        "DeepSeek Chat v3.1 (Free)",
+			Provider:    "DeepSeek",
+			ContextSize: 32768,
+			Available:   true,
+		},
 	}
 
 	// Cache the models
@@ -316,12 +282,10 @@ func (r *OpenRouterRepository) GetBestModel() (*repositories.LLMModel, error) {
 		return nil, errors.New("no models available")
 	}
 
-	// Prefer specific models known to work well for commit messages
+	// Preferred models in order of preference - fastest first
 	preferredModels := []string{
-		"openai/gpt-4o-mini",
-		"openai/gpt-3.5-turbo",
-		"anthropic/claude-3-haiku",
-		"meta-llama/llama-3.1-8b-instruct",
+		"meta-llama/llama-3.2-3b-instruct:free",
+		"deepseek/deepseek-chat-v3.1:free",
 	}
 
 	for _, preferred := range preferredModels {
