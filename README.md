@@ -141,9 +141,8 @@ gmit config help
 
 Gmit supports the following AI models by default:
 
-- **deepseek/deepseek-r1:free** (default, 131k context, reasoning optimized) <mcreference link="https://www.reddit.com/r/CLine/comments/1klb42w/decent_free_models_from_openrouter_did_some/" index="4">4</mcreference>
-- **meta-llama/llama-4-maverick:free** (256k context, multimodal) <mcreference link="https://apidog.com/blog/free-ai-models/" index="5">5</mcreference>
-- **deepseek/deepseek-chat-v3.1:free** (fallback, 32k context)
+- **deepseek/deepseek-chat-v3.1:free** (default) - 32k context, stable and accurate
+- **moonshotai/kimi-k2:free** (alternative) - 200k context, very large context window
 
 To use other models available through OpenRouter, set them as default using:
 ```bash
