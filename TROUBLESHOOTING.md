@@ -3,13 +3,21 @@
 ## Erro EACCESS no Linux ao configurar chave API
 
 ### Problema
-Ao executar `gommit config set-key <sua-chave>` no Linux, você pode receber um erro de EACCESS (permissão negada).
+Ao executar `gmit config set-key <sua-chave>` no Linux, você pode receber um erro de EACCESS (permissão negada).
 
 ### Causa
 Este erro geralmente ocorre quando:
 1. O diretório home do usuário não tem permissões adequadas
 2. O diretório `~/.gmit` não pode ser criado
 3. Problemas com o keyring do sistema (GNOME Keyring, KWallet)
+4. Permissões restritivas em diretórios existentes
+
+### Melhorias Implementadas
+O gmit agora inclui:
+- **Correção automática de permissões**: O sistema verifica e corrige automaticamente as permissões dos diretórios
+- **Fallback robusto**: Se não conseguir definir permissões ideais, tenta permissões mínimas (755)
+- **Verificação de diretórios existentes**: Corrige permissões de diretórios já criados
+- **Mensagens de erro mais claras**: Indica problemas específicos de permissão
 
 ### Soluções
 
@@ -19,10 +27,22 @@ ls -la ~/
 # O diretório home deve ter permissões de escrita para o usuário
 ```
 
-#### 2. Criar manualmente o diretório de configuração
+#### 2. O gmit agora cria automaticamente o diretório com permissões corretas
 ```bash
-mkdir -p ~/.gmit
+# O gmit tentará automaticamente:
+# - Criar ~/.gmit com permissões 755
+# - Corrigir permissões se o diretório já existir
+# - Usar fallback se houver problemas de permissão
+```
+
+#### 3. Verificação manual (se necessário)
+```bash
+# Verificar permissões atuais
+ls -la ~/.gmit
+
+# Corrigir manualmente se necessário
 chmod 755 ~/.gmit
+chmod 755 ~/.gmit/keyring
 ```
 
 #### 3. Verificar se o keyring do sistema está funcionando
@@ -56,21 +76,36 @@ Adicione esta linha ao seu `~/.bashrc` ou `~/.zshrc` para torná-la permanente.
 ### Verificação
 Após aplicar as soluções, teste novamente:
 ```bash
-gommit config set-key sua-chave-api
-gommit config get-key
+gmit config set-key sua-chave-api
+gmit config get-key
+```
+
+### Diagnóstico Avançado
+Se ainda houver problemas, verifique:
+
+```bash
+# Verificar permissões detalhadas
+ls -la ~/.gmit/
+ls -la ~/.gmit/keyring/
+
+# Verificar se o usuário tem acesso de escrita
+touch ~/.gmit/test_write && rm ~/.gmit/test_write
+
+# Verificar logs do sistema para erros de permissão
+journalctl -u gmit --since "1 hour ago"
 ```
 
 ## Outros Problemas Comuns
 
 ### Comando não encontrado
-Se `gommit` não for encontrado, verifique se está no PATH:
+Se `gmit` não for encontrado, verifique se está no PATH:
 ```bash
-which gommit
+which gmit
 echo $PATH
 ```
 
 ### Problemas de conectividade
 Para testar a conectividade com a API:
 ```bash
-gommit config validate
+gmit config validate
 ```

@@ -32,9 +32,9 @@ func NewFileConfigRepository() (*FileConfigRepository, error) {
 	configDir := filepath.Join(homeDir, ".gmit")
 	configFile := filepath.Join(configDir, "config.json")
 
-	// Create config directory if it doesn't exist
-	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create config directory %s: %w", configDir, err)
+	// Ensure config directory exists with proper permissions
+	if err := ensureDirectoryWithPermissions(configDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to setup config directory %s: %w", configDir, err)
 	}
 
 	// Verify directory is writable
@@ -187,6 +187,12 @@ func (r *FileConfigRepository) loadConfigFile() (*configFileData, error) {
 
 // saveConfigFile writes the configuration data to the file.
 func (r *FileConfigRepository) saveConfigFile(data *configFileData) error {
+	// Ensure parent directory has proper permissions
+	dir := filepath.Dir(r.configFile)
+	if err := ensureDirectoryWithPermissions(dir, 0755); err != nil {
+		return fmt.Errorf("failed to ensure config directory permissions: %w", err)
+	}
+
 	jsonData, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal config data: %w", err)
@@ -208,4 +214,40 @@ func (r *FileConfigRepository) GetConfigDir() string {
 // GetConfigFile returns the configuration file path.
 func (r *FileConfigRepository) GetConfigFile() string {
 	return r.configFile
+}
+
+// ensureDirectoryWithPermissions creates a directory with proper permissions
+// and fixes permissions if the directory already exists.
+func ensureDirectoryWithPermissions(dir string, perm os.FileMode) error {
+	// Try to create directory with desired permissions
+	if err := os.MkdirAll(dir, perm); err != nil {
+		// If creation fails, try with more permissive settings
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory even with fallback permissions: %w", err)
+		}
+	}
+
+	// Check if directory exists and verify/fix permissions
+	info, err := os.Stat(dir)
+	if err != nil {
+		return fmt.Errorf("failed to stat directory: %w", err)
+	}
+
+	// Ensure directory has at least the minimum required permissions (0755)
+	currentPerm := info.Mode().Perm()
+	minPerm := os.FileMode(0755)
+	
+	// If current permissions are too restrictive, try to fix them
+	if currentPerm&minPerm != minPerm {
+		if err := os.Chmod(dir, perm); err != nil {
+			// If chmod fails, try with minimum permissions
+			if err := os.Chmod(dir, minPerm); err != nil {
+				// If still fails, at least warn but don't fail completely
+				// The directory exists, so basic operations might still work
+				return fmt.Errorf("warning: could not set optimal directory permissions (directory exists but may have restricted access): %w", err)
+			}
+		}
+	}
+
+	return nil
 }
