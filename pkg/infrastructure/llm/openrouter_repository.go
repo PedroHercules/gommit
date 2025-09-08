@@ -232,13 +232,20 @@ func (r *OpenRouterRepository) GeneratePRDescription(diff *entities.GitDiff, mod
 
 // GetAvailableModels returns a list of available LLM models.
 func (r *OpenRouterRepository) GetAvailableModels() ([]repositories.LLMModel, error) {
-	// Return predefined models - fastest first
+	// Return predefined models - large context and fast models first
 	models := []repositories.LLMModel{
 		{
-			ID:          "meta-llama/llama-3.2-3b-instruct:free",
-			Name:        "Meta Llama 3.2 3B Instruct (Free)",
-			Provider:    "Meta",
+			ID:          "deepseek/deepseek-r1:free",
+			Name:        "DeepSeek R1 (Free)",
+			Provider:    "DeepSeek",
 			ContextSize: 131072,
+			Available:   true,
+		},
+		{
+			ID:          "meta-llama/llama-4-maverick:free",
+			Name:        "Meta Llama 4 Maverick (Free)",
+			Provider:    "Meta",
+			ContextSize: 256000,
 			Available:   true,
 		},
 		{
@@ -282,9 +289,10 @@ func (r *OpenRouterRepository) GetBestModel() (*repositories.LLMModel, error) {
 		return nil, errors.New("no models available")
 	}
 
-	// Preferred models in order of preference - fastest first
+	// Preferred models in order of preference - large context and fast models first
 	preferredModels := []string{
-		"meta-llama/llama-3.2-3b-instruct:free",
+		"deepseek/deepseek-r1:free",
+		"meta-llama/llama-4-maverick:free",
 		"deepseek/deepseek-chat-v3.1:free",
 	}
 

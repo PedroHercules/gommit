@@ -14,24 +14,8 @@ Gmit is a command-line tool that uses artificial intelligence to automatically g
 
 ## 🚀 Installation
 
-### Via NPM (Recommended)
-
 ```bash
 npm install -g gmit
-```
-
-### Manual Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/PedroHercules/gommit.git
-cd gommit
-
-# Install dependencies
-go mod tidy
-
-# Build the project
-go build -o gmit main.go
 ```
 
 ## Configuration
@@ -46,6 +30,22 @@ gmit config set-model claude-3-sonnet
 # Check configuration
 gmit config summary
 ```
+
+## 💰 API Costs and Usage
+
+**Important**: Each user is responsible for their own OpenRouter API costs. Please monitor your usage carefully:
+
+- **Free Models Available**: Gmit is configured to use free models by default (like `meta-llama/llama-3.2-3b-instruct:free`)
+- **Cost Monitoring**: Check your usage at [OpenRouter Dashboard](https://openrouter.ai/activity)
+- **Rate Limits**: Free models have usage limits - monitor to avoid interruptions
+- **Paid Models**: If you choose paid models, costs vary from $0.001 to $0.10+ per request
+- **Usage Tips**:
+  - Use `--dry-run` to preview without committing
+  - Prefer free models for regular use
+  - Monitor your monthly usage
+  - Set up billing alerts in OpenRouter
+
+> ⚠️ **Disclaimer**: The developers of Gmit are not responsible for any API costs incurred. Users should monitor their own usage and set appropriate limits.
 
 ## Usage
 
@@ -135,81 +135,20 @@ gmit version
 gmit config help
 ```
 
-## Architecture
 
-This project follows **Clean Architecture** principles, providing a clean, testable, and maintainable structure. It's ideal for learning Go and software architecture patterns.
-
-### 📁 Project Structure
-
-```
-gmit/
-├── main.go                      # Application entry point
-├── pkg/
-│   ├── domain/                  # Domain Layer (business rules)
-│   │   ├── entities/            # Domain entities
-│   │   │   ├── commit.go        # Commit entity
-│   │   │   ├── config.go        # Config entity
-│   │   │   └── git_diff.go      # GitDiff entity
-│   │   ├── repositories/        # Repository interfaces
-│   │   │   ├── config_repository.go
-│   │   │   ├── git_repository.go
-│   │   │   └── llm_repository.go
-│   │   └── usecases/            # Use cases (business logic)
-│   │       ├── commit_usecase.go
-│   │       ├── config_usecase.go
-│   │       ├── generate_commit_usecase.go
-│   │       └── pull_request_usecase.go
-│   ├── infrastructure/          # Infrastructure Layer
-│   │   ├── config/              # Configuration implementation
-│   │   │   ├── file_config_repository.go
-│   │   │   └── keyring_service.go
-│   │   ├── git/                 # Git implementation
-│   │   │   └── git_repository.go
-│   │   └── llm/                 # LLM implementation
-│   │       └── openrouter_repository.go
-│   ├── application/             # Application Layer
-│   │   └── services/            # Application services
-│   │       ├── commit/          # Commit services
-│   │       ├── config/          # Configuration services
-│   │       └── pull-request/    # Pull request services
-│   └── interfaces/              # Interface Layer
-│       └── cli/                 # Command line interface
-│           ├── commands.go      # Command processing
-│           └── help.go          # Help system
-├── bin/                         # Compiled binaries
-├── install.js                   # Installation script
-├── package.json                 # Node.js configuration
-└── README.md                    # This file
-```
-
-## Dependencies
-
-The project uses the following main dependencies:
-
-- **github.com/99designs/keyring**: Secure credential storage
-- **github.com/joho/godotenv**: Environment variable loading
-- **Go 1.21+**: Minimum Go version
-
-```bash
-# Install dependencies
-go mod tidy
-
-# Verify dependencies
-go mod verify
-
-# Update dependencies
-go get -u ./...
-```
 
 ## Supported AI Models
 
-Gmit supports various AI models through OpenRouter:
+Gmit supports the following AI models by default:
 
-- **Claude 3 Sonnet** (recommended for quality)
-- **Claude 3 Haiku** (faster, cost-effective)
-- **GPT-4** (OpenAI)
-- **GPT-3.5 Turbo** (faster alternative)
-- And many more available through OpenRouter
+- **deepseek/deepseek-r1:free** (default, 131k context, reasoning optimized) <mcreference link="https://www.reddit.com/r/CLine/comments/1klb42w/decent_free_models_from_openrouter_did_some/" index="4">4</mcreference>
+- **meta-llama/llama-4-maverick:free** (256k context, multimodal) <mcreference link="https://apidog.com/blog/free-ai-models/" index="5">5</mcreference>
+- **deepseek/deepseek-chat-v3.1:free** (fallback, 32k context)
+
+To use other models available through OpenRouter, set them as default using:
+```bash
+gmit config set-model <model-name>
+```
 
 ## Examples
 
@@ -247,11 +186,7 @@ gmit pr --base-branch develop
 
 ## 🤝 Contributing
 
-1. Fork the project
-2. Create a feature branch (`git checkout -b feature/new-feature`)
-3. Commit your changes (`git commit -am 'feat: add new feature'`)
-4. Push to the branch (`git push origin feature/new-feature`)
-5. Open a Pull Request
+See [DEVELOPMENT.md](DEVELOPMENT.md) for development setup and contribution guidelines.
 
 ## 📄 License
 
