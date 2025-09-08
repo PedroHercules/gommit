@@ -29,13 +29,20 @@ func NewFileConfigRepository() (*FileConfigRepository, error) {
 	}
 
 	// Create config directory path
-	configDir := filepath.Join(homeDir, ".gommit")
+	configDir := filepath.Join(homeDir, ".gmit")
 	configFile := filepath.Join(configDir, "config.json")
 
 	// Create config directory if it doesn't exist
 	if err := os.MkdirAll(configDir, 0755); err != nil {
-		return nil, fmt.Errorf("failed to create config directory: %w", err)
+		return nil, fmt.Errorf("failed to create config directory %s: %w", configDir, err)
 	}
+
+	// Verify directory is writable
+	testFile := filepath.Join(configDir, ".test_write")
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+		return nil, fmt.Errorf("config directory %s is not writable: %w", configDir, err)
+	}
+	os.Remove(testFile) // Clean up test file
 
 	// Initialize keyring service
 	keyringService := NewSystemKeyringService(configDir)
@@ -99,17 +106,17 @@ func (r *FileConfigRepository) Load() (*entities.Config, error) {
 
 // SaveAPIKey stores the API key securely in the system keyring.
 func (r *FileConfigRepository) SaveAPIKey(apiKey string) error {
-	return r.keyring.Set("gommit", "api_key", apiKey)
+	return r.keyring.Set("gmit", "api_key", apiKey)
 }
 
 // LoadAPIKey retrieves the API key from the system keyring.
 func (r *FileConfigRepository) LoadAPIKey() (string, error) {
-	return r.keyring.Get("gommit", "api_key")
+	return r.keyring.Get("gmit", "api_key")
 }
 
 // DeleteAPIKey removes the API key from the system keyring.
 func (r *FileConfigRepository) DeleteAPIKey() error {
-	return r.keyring.Delete("gommit", "api_key")
+	return r.keyring.Delete("gmit", "api_key")
 }
 
 // SaveDefaultModel stores the default model preference in the config file.

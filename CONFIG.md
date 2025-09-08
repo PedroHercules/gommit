@@ -50,8 +50,8 @@ Se nenhuma chave for encontrada, o comando falhará com uma mensagem explicativa
 
 O Gommit cria arquivos de configuração nos seguintes locais:
 
-- **Windows**: `%APPDATA%\gommit\config.json`
-- **macOS**: `~/Library/Application Support/gommit/config.json`
-- **Linux**: `~/.config/gommit/config.json`
+- **Windows**: `%APPDATA%\gmit\config.json`
+- **macOS**: `~/Library/Application Support/gmit/config.json`
+- **Linux**: `~/.config/gmit/config.json`
 
 Esses arquivos contêm apenas configurações não-sensíveis. As chaves API ficam no keyring do sistema.

@@ -1,6 +1,6 @@
 .env.test
 .env
 # build file
-gommit
+gmit
 
 *.exe

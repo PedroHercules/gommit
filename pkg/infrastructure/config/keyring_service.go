@@ -35,8 +35,9 @@ func (s *SimpleKeyringService) Set(service, user, password string) error {
 	filePath := s.getCredentialPath(service, user)
 	dir := filepath.Dir(filePath)
 
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("failed to create keyring directory: %w", err)
+	// Create keyring directory with proper permissions
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("failed to create keyring directory %s: %w", dir, err)
 	}
 
 	cred := map[string]string{
@@ -51,7 +52,7 @@ func (s *SimpleKeyringService) Set(service, user, password string) error {
 	}
 
 	if err := os.WriteFile(filePath, data, 0600); err != nil {
-		return fmt.Errorf("failed to write credential file: %w", err)
+		return fmt.Errorf("failed to write credential file %s (check directory permissions): %w", filePath, err)
 	}
 
 	return nil
@@ -112,7 +113,7 @@ type SystemKeyringService struct {
 func NewSystemKeyringService(configDir string) KeyringService {
 	// Try to open system keyring
 	kr, err := keyring.Open(keyring.Config{
-		ServiceName: "gommit",
+		ServiceName: "gmit",
 	})
 
 	fallback := NewSimpleKeyringService(configDir)
@@ -140,10 +141,14 @@ func (s *SystemKeyringService) Set(service, user, password string) error {
 		}); err == nil {
 			return nil
 		}
+		// System keyring failed, will try fallback
 	}
 
 	// Fall back to simple keyring
-	return s.fallback.Set(service, user, password)
+	if err := s.fallback.Set(service, user, password); err != nil {
+		return fmt.Errorf("failed to store credential in both system keyring and fallback: %w", err)
+	}
+	return nil
 }
 
 // Get retrieves a credential using the system keyring or fallback.
