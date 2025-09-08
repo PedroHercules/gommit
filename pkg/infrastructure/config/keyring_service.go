@@ -35,9 +35,9 @@ func (s *SimpleKeyringService) Set(service, user, password string) error {
 	filePath := s.getCredentialPath(service, user)
 	dir := filepath.Dir(filePath)
 
-	// Create keyring directory with proper permissions
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return fmt.Errorf("failed to create keyring directory %s: %w", dir, err)
+	// Ensure keyring directory exists with proper permissions
+	if err := ensureDirectoryWithPermissions(dir, 0755); err != nil {
+		return fmt.Errorf("failed to setup keyring directory %s: %w", dir, err)
 	}
 
 	cred := map[string]string{

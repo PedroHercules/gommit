@@ -104,14 +104,10 @@ func (r *OpenRouterRepository) GenerateCommitMessage(diff *entities.GitDiff, mod
 	// Create the prompt for commit message generation
 	prompt := r.createCommitPrompt(diff)
 
-	// Prepare the request
+	// Prepare the request - using only user message to avoid "developer instruction" issues
 	request := openRouterRequest{
 		Model: modelToUse,
 		Messages: []openRouterMessage{
-			{
-				Role:    "system",
-				Content: "You are an expert developer who writes clear, concise commit messages following conventional commits format. Generate a commit message based on the provided git diff.",
-			},
 			{
 				Role:    "user",
 				Content: prompt,
@@ -236,52 +232,22 @@ func (r *OpenRouterRepository) GeneratePRDescription(diff *entities.GitDiff, mod
 
 // GetAvailableModels returns a list of available LLM models.
 func (r *OpenRouterRepository) GetAvailableModels() ([]repositories.LLMModel, error) {
-	// Return cached models if available
-	if len(r.models) > 0 {
-		return r.models, nil
-	}
-
-	// Fetch models from API
-	req, err := http.NewRequest("GET", r.baseURL+"/models", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+r.apiKey)
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := r.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch models: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	var modelsResp openRouterModelsResponse
-	if err := json.Unmarshal(body, &modelsResp); err != nil {
-		return nil, fmt.Errorf("failed to parse models response: %w", err)
-	}
-
-	// Convert to our model format
-	models := make([]repositories.LLMModel, 0, len(modelsResp.Data))
-	for _, model := range modelsResp.Data {
-		// Extract provider from model ID
-		provider := "Unknown"
-		if parts := strings.Split(model.ID, "/"); len(parts) > 0 {
-			provider = strings.Title(parts[0])
-		}
-
-		models = append(models, repositories.LLMModel{
-			ID:          model.ID,
-			Name:        model.Name,
-			Provider:    provider,
-			ContextSize: model.Context,
+	// Return predefined models - stable and reliable models first
+	models := []repositories.LLMModel{
+		{
+			ID:          "deepseek/deepseek-chat-v3.1:free",
+			Name:        "DeepSeek Chat v3.1 (Free)",
+			Provider:    "DeepSeek",
+			ContextSize: 32768,
 			Available:   true,
-		})
+		},
+		{
+			ID:          "moonshotai/kimi-k2:free",
+			Name:        "Moonshot AI Kimi-K2 (Free)",
+			Provider:    "Moonshot AI",
+			ContextSize: 200000,
+			Available:   true,
+		},
 	}
 
 	// Cache the models
@@ -316,12 +282,10 @@ func (r *OpenRouterRepository) GetBestModel() (*repositories.LLMModel, error) {
 		return nil, errors.New("no models available")
 	}
 
-	// Prefer specific models known to work well for commit messages
+	// Preferred models in order of preference - stable and reliable models first
 	preferredModels := []string{
-		"openai/gpt-4o-mini",
-		"openai/gpt-3.5-turbo",
-		"anthropic/claude-3-haiku",
-		"meta-llama/llama-3.1-8b-instruct",
+		"deepseek/deepseek-chat-v3.1:free",
+		"moonshotai/kimi-k2:free",
 	}
 
 	for _, preferred := range preferredModels {
@@ -379,43 +343,46 @@ func (r *OpenRouterRepository) GetModelInfo(modelID string) (*repositories.LLMMo
 
 // createCommitPrompt creates a prompt for commit message generation.
 func (r *OpenRouterRepository) createCommitPrompt(diff *entities.GitDiff) string {
-	prompt := fmt.Sprintf(`You are a commit message generator following Conventional Commits specification. Analyze the git diff and generate ONLY a commit message that follows EXACTLY this format:
+	// Format the files list with proper prefix
+	filesList := ""
+	for _, file := range diff.Files {
+		filesList += "- " + file + "\n"
+	}
+	
+	prompt := fmt.Sprintf(`You MUST generate a commit message using EXACTLY this template:
 
 type(scope): description
-- Bullet point explaining what was added/changed/fixed in past tense
-- Bullet point explaining what was added/changed/fixed in past tense
-- Bullet point explaining what was added/changed/fixed in past tense
+- Added/Updated/Fixed/Removed [generic description]
+- Added/Updated/Fixed/Removed [generic description]
+- Added/Updated/Fixed/Removed [generic description]
 
 Changed files:
-- file/path.ext
+%s
+CRITICAL: Your output MUST include the "Changed files:" section exactly as shown above.
 
-Example:
-feat(acompanhar-servicos): implement service code generation
-- Added service code generation using user patio code
-- Integrated service provisioning on button click
-- Used useServiceProvision and useUser from stores
+EXAMPLE of correct format:
+feat(config): update model settings
+- Updated configuration parameters
+- Enhanced model selection logic
+- Fixed default model assignment
 
 Changed files:
-- src/app/(app)/prestacao-servicos/acompanhar-servicos/page.tsx
+- pkg/config/models.go
+- README.md
 
 RULES:
-1) Types MUST be one of: feat, fix, docs, style, refactor, test, chore, ci, perf, build
-2) Scope MUST use module/component name in parentheses
-3) Description MUST be in present tense, lowercase, no period, max 50 chars
-4) Body MUST use bullet points with past tense verbs (Added, Enhanced, Fixed, Updated, Implemented)
-5) MUST include 'Changed files:' section with file paths
-6) Return ONLY the commit message, no explanations, no extra characters, no quotes
-7) CAREFULLY analyze the git diff to identify EXACTLY what was added, removed, or modified
-8) ONLY include changes that are actually present in the diff
-9) Pay close attention to the + and - symbols in the diff to accurately determine additions and removals
+1) Copy the "Changed files:" section EXACTLY as provided above
+2) Use types: feat, fix, docs, style, refactor, test, chore
+3) Keep description under 50 chars, lowercase, no period
+4) Use verbs: Added, Updated, Fixed, Removed, Enhanced, Implemented
+5) Be generic with terms like 'configuration', 'implementation', 'functionality'
+6) Output ONLY the commit message - nothing else
+7) The "Changed files:" section is MANDATORY - do not omit it
 
 Git diff:
-%s
-
-Changed files:
 %s`,
-		diff.Content,
-		strings.Join(diff.Files, "\n- "))
+		filesList,
+		diff.Content)
 
 	return prompt
 }
@@ -447,7 +414,7 @@ func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
 <!-- The list below is automatically generated from the git diff -->
 %s
 
-RULES:
+CRITICAL RULES - FOLLOW EXACTLY:
 1) Follow the format EXACTLY as shown above
 2) Do NOT add any additional explanations or notes outside the template
 3) Do NOT include any text like "Here's the PR description" or "I've analyzed the diff"
@@ -457,6 +424,12 @@ RULES:
 7) ONLY include changes that are actually present in the diff
 8) Pay close attention to the + and - symbols in the diff to accurately determine additions and removals
 9) Ensure each bullet point corresponds to a real change in the code
+10) DO NOT invent or assume changes that are not explicitly shown in the diff
+11) DO NOT add features or functionality that are not clearly visible in the code changes
+12) STRICTLY base your description on the actual code modifications shown
+13) If unsure about a change, describe it generically rather than making assumptions
+14) NEVER hallucinate or create fictional details about the implementation
+15) Only describe what you can directly observe in the code changes
 
 Git diff:
 %s`,
