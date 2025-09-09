@@ -46,24 +46,19 @@ async function install() {
     
     const { osName, archName, ext } = getPlatform();
     const sourceBinaryName = `gmit-${osName}-${archName}${ext}`;
-    const targetBinaryName = `gommit${ext}`;
     
     const binDir = path.join(__dirname, 'bin');
     const sourceBinaryPath = path.join(binDir, sourceBinaryName);
-    const targetBinaryPath = path.join(binDir, 'gmit');
     
     // Check if the platform-specific binary exists
     if (!fs.existsSync(sourceBinaryPath)) {
       throw new Error(`Binary not found for platform ${osName}-${archName}. Available binaries: ${fs.readdirSync(binDir).join(', ')}`);
     }
     
-    // Copy the platform-specific binary to the generic name
-    console.log(`Setting up binary for ${osName}-${archName}...`);
-    fs.copyFileSync(sourceBinaryPath, targetBinaryPath);
-    
     // Make executable on Unix systems
+    console.log(`Setting up binary for ${osName}-${archName}...`);
     if (process.platform !== 'win32') {
-      fs.chmodSync(targetBinaryPath, '755');
+      fs.chmodSync(sourceBinaryPath, 0o755);
     }
     
     console.log('gmit installed successfully!');

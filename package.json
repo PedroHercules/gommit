@@ -1,6 +1,6 @@
 {
   "name": "gmit",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "AI-powered Git commit message and pull request generator using OpenRouter LLM models",
   "main": "install.js",
   "bin": {

@@ -237,9 +237,9 @@ func (r *CommandGitRepository) UpdateBaseBranch(baseBranch string) error {
 
 	// If we're already on the base branch, just pull
 	if currentBranch == baseBranch {
-		_, err := r.runGitCommand("pull", "origin", baseBranch)
-		if err != nil {
-			return fmt.Errorf("failed to pull latest changes for branch %s: %w", baseBranch, err)
+		_, pullErr := r.runGitCommand("pull", "origin", baseBranch)
+		if pullErr != nil {
+			return fmt.Errorf("failed to pull latest changes for branch %s: %w", baseBranch, pullErr)
 		}
 		return nil
 	}
