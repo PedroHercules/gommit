@@ -45,4 +45,12 @@ type GitRepository interface {
 
 	// GetRepositoryRoot returns the root directory of the Git repository.
 	GetRepositoryRoot() (string, error)
+
+	// FetchRemote fetches the latest changes from the remote repository.
+	// This is equivalent to running 'git fetch origin'.
+	FetchRemote() error
+
+	// UpdateBaseBranch updates the specified base branch with the latest changes from remote.
+	// This safely switches to the base branch, pulls latest changes, and returns to the original branch.
+	UpdateBaseBranch(baseBranch string) error
 }

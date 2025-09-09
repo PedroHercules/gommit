@@ -216,3 +216,60 @@ func (r *CommandGitRepository) ValidateGitInstallation() error {
 
 	return nil
 }
+
+// FetchRemote fetches the latest changes from the remote repository.
+func (r *CommandGitRepository) FetchRemote() error {
+	_, err := r.runGitCommand("fetch", "origin")
+	if err != nil {
+		return fmt.Errorf("failed to fetch from remote: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateBaseBranch updates the specified base branch with the latest changes from remote.
+func (r *CommandGitRepository) UpdateBaseBranch(baseBranch string) error {
+	// Get current branch to return to it later
+	currentBranch, err := r.GetCurrentBranch()
+	if err != nil {
+		return fmt.Errorf("failed to get current branch: %w", err)
+	}
+
+	// If we're already on the base branch, just pull
+	if currentBranch == baseBranch {
+		_, err := r.runGitCommand("pull", "origin", baseBranch)
+		if err != nil {
+			return fmt.Errorf("failed to pull latest changes for branch %s: %w", baseBranch, err)
+		}
+		return nil
+	}
+
+	// Check if base branch exists locally
+	_, err = r.runGitCommand("show-ref", "--verify", "--quiet", "refs/heads/"+baseBranch)
+	if err != nil {
+		// Branch doesn't exist locally, create it from remote
+		_, err = r.runGitCommand("checkout", "-b", baseBranch, "origin/"+baseBranch)
+		if err != nil {
+			return fmt.Errorf("failed to create local branch %s from remote: %w", baseBranch, err)
+		}
+	} else {
+		// Branch exists locally, switch to it and pull
+		_, err = r.runGitCommand("checkout", baseBranch)
+		if err != nil {
+			return fmt.Errorf("failed to checkout branch %s: %w", baseBranch, err)
+		}
+
+		_, err = r.runGitCommand("pull", "origin", baseBranch)
+		if err != nil {
+			return fmt.Errorf("failed to pull latest changes for branch %s: %w", baseBranch, err)
+		}
+	}
+
+	// Return to original branch
+	_, err = r.runGitCommand("checkout", currentBranch)
+	if err != nil {
+		return fmt.Errorf("failed to return to original branch %s: %w", currentBranch, err)
+	}
+
+	return nil
+}
