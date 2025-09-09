@@ -411,7 +411,6 @@ func (r *OpenRouterRepository) createPRPrompt(diff *entities.GitDiff) string {
   - [Detailed bullet point about specific change]
 
 ### Modified Files
-<!-- The list below is automatically generated from the git diff -->
 %s
 
 CRITICAL RULES - FOLLOW EXACTLY:
