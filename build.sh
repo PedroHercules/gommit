@@ -32,6 +32,10 @@ for build in "${builds[@]}"; do
     GOOS="$os" GOARCH="$arch" go build -ldflags "-s -w -X main.version=$VERSION" -o "$output_path" .
     
     if [ $? -eq 0 ]; then
+        # Set executable permissions for Unix binaries
+        if [ "$os" != "windows" ]; then
+            chmod +x "$output_path"
+        fi
         echo "✓ $output_name compilado com sucesso"
     else
         echo "✗ Erro ao compilar $output_name"
