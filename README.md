@@ -142,7 +142,7 @@ gmit config help
 Gmit supports the following AI models by default:
 
 - **deepseek/deepseek-chat-v3.1:free** (default) - 32k context, stable and accurate
-- **moonshotai/kimi-k2:free** (alternative) - 200k context, very large context window
+- **nvidia/llama-3.1-nemotron-70b-instruct** (alternative) - High-performance model optimized for code understanding
 
 To use other models available through OpenRouter, set them as default using:
 ```bash
