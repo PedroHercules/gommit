@@ -242,10 +242,10 @@ func (r *OpenRouterRepository) GetAvailableModels() ([]repositories.LLMModel, er
 			Available:   true,
 		},
 		{
-			ID:          "moonshotai/kimi-k2:free",
-			Name:        "Moonshot AI Kimi-K2 (Free)",
-			Provider:    "Moonshot AI",
-			ContextSize: 200000,
+			ID:          "nvidia/nemotron-nano-9b-v2:free",
+			Name:        "Nvidia Nemotron Nano 9B V2 (Free)",
+			Provider:    "Nvidia",
+			ContextSize: 128000,
 			Available:   true,
 		},
 	}
@@ -285,7 +285,7 @@ func (r *OpenRouterRepository) GetBestModel() (*repositories.LLMModel, error) {
 	// Preferred models in order of preference - stable and reliable models first
 	preferredModels := []string{
 		"deepseek/deepseek-chat-v3.1:free",
-		"moonshotai/kimi-k2:free",
+		"nvidia/nemotron-nano-9b-v2:free",
 	}
 
 	for _, preferred := range preferredModels {
@@ -348,7 +348,7 @@ func (r *OpenRouterRepository) createCommitPrompt(diff *entities.GitDiff) string
 	for _, file := range diff.Files {
 		filesList += "- " + file + "\n"
 	}
-	
+
 	prompt := fmt.Sprintf(`You MUST generate a commit message using EXACTLY this template:
 
 type(scope): description
