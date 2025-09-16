@@ -284,8 +284,8 @@ func (r *OpenRouterRepository) GetBestModel() (*repositories.LLMModel, error) {
 
 	// Preferred models in order of preference - stable and reliable models first
 	preferredModels := []string{
-		"nvidia/nemotron-nano-9b-v2:free",
 		"deepseek/deepseek-chat-v3.1:free",
+		"nvidia/nemotron-nano-9b-v2:free",
 	}
 
 	for _, preferred := range preferredModels {
