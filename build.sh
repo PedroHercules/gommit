@@ -10,8 +10,8 @@ echo "Iniciando build do gmit..."
 # Criar diretório bin se não existir
 mkdir -p bin
 
-# Definir versão
-VERSION="1.0.0"
+# Usar a versão declarada no package npm.
+VERSION="$(node -p "require('./package.json').version")"
 
 # Builds para diferentes plataformas
 builds=(
@@ -20,6 +20,7 @@ builds=(
     "darwin:amd64:"
     "darwin:arm64:"
     "windows:amd64:.exe"
+    "windows:arm64:.exe"
 )
 
 for build in "${builds[@]}"; do
@@ -29,7 +30,7 @@ for build in "${builds[@]}"; do
     
     echo "Compilando para ${os}/${arch}..."
     
-    GOOS="$os" GOARCH="$arch" go build -ldflags "-s -w -X main.version=$VERSION" -o "$output_path" .
+    GOOS="$os" GOARCH="$arch" go build -trimpath -ldflags "-s -w -X github.com/PedroHercules/gommit/pkg/interfaces/cli.version=$VERSION" -o "$output_path" .
     
     if [ $? -eq 0 ]; then
         # Set executable permissions for Unix binaries

@@ -1,0 +1,82 @@
+name: CI and npm release
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: npm-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test Go packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go test ./...
+
+  release:
+    name: Version and publish npm package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Ensure npm CLI supports trusted publishing
+        run: |
+          npm install --global 'npm@^11.5.1'
+          npm --version
+
+      - name: Initialize the existing npm release tag if needed
+        run: |
+          if [[ -z "$(git tag --list 'v[0-9]*')" ]]; then
+            package_name="$(node -p "require('./package.json').name")"
+            package_version="$(node -p "require('./package.json').version")"
+            npm_version="$(npm view "${package_name}@latest" version)"
+            if [[ "$npm_version" != "$package_version" ]]; then
+              printf 'package.json says %s@%s, but npm latest is %s. Reconcile the release baseline before publishing.\n' "$package_name" "$package_version" "$npm_version" >&2
+              exit 1
+            fi
+
+            version_pattern="\"version\": \"${package_version}\""
+            baseline_commit="$(git log -1 --format=%H -S"$version_pattern" -- package.json)"
+            if [[ -z "$baseline_commit" ]]; then
+              printf 'Could not find the commit that introduced package version %s.\n' "$package_version" >&2
+              exit 1
+            fi
+
+            tag="v${package_version}"
+            git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' tag -a "$tag" "$baseline_commit" -m "npm release baseline ${tag}"
+            git push origin "$tag"
+          fi
+
+      - name: Install release tooling
+        run: npm install --no-save --package-lock=false semantic-release@25.0.9 @semantic-release/exec@7.1.0 @semantic-release/git@11.0.1
+
+      - name: Release to npm and GitHub
+        run: ./node_modules/.bin/semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

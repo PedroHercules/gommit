@@ -10,8 +10,8 @@ if (!(Test-Path "bin")) {
     New-Item -ItemType Directory -Path "bin"
 }
 
-# Definir versão
-$VERSION = "1.0.0"
+# Usar a versão declarada no package npm.
+$VERSION = node -p "require('./package.json').version"
 
 # Builds para diferentes plataformas
 $builds = @(
@@ -19,7 +19,8 @@ $builds = @(
     @{OS="linux"; ARCH="arm64"; EXT=""},
     @{OS="darwin"; ARCH="amd64"; EXT=""},
     @{OS="darwin"; ARCH="arm64"; EXT=""},
-    @{OS="windows"; ARCH="amd64"; EXT=".exe"}
+	@{OS="windows"; ARCH="amd64"; EXT=".exe"},
+	@{OS="windows"; ARCH="arm64"; EXT=".exe"}
 )
 
 foreach ($build in $builds) {
@@ -31,7 +32,7 @@ foreach ($build in $builds) {
     $env:GOOS = $build.OS
     $env:GOARCH = $build.ARCH
     
-    go build -ldflags "-s -w -X main.version=$VERSION" -o $outputPath .
+    go build -trimpath -ldflags "-s -w -X github.com/PedroHercules/gommit/pkg/interfaces/cli.version=$VERSION" -o $outputPath .
     
     if ($LASTEXITCODE -eq 0) {
         Write-Host "✓ $outputName compilado com sucesso" -ForegroundColor Green

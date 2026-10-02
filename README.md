@@ -18,6 +18,12 @@ Gmit is a command-line tool that uses artificial intelligence to automatically g
 npm install -g gmit
 ```
 
+## Maintainer releases
+
+Pull requests to `main` run the Go test suite. A push to `main` with Conventional Commit changes automatically calculates the next SemVer version, builds binaries for Linux, macOS, and Windows on amd64 and arm64, updates `package.json`, publishes the package to npm, and creates a GitHub release. `feat` creates a minor release, `fix` and `perf` create patch releases, and `BREAKING CHANGE` creates a major release; documentation and chore commits do not publish a new version.
+
+Before the first automated release, enable **Trusted Publishing** in the `gmit` package settings on npmjs.com for GitHub Actions, repository `PedroHercules/gommit`, workflow file `.github/workflows/ci-cd.yml`, with no GitHub environment. The workflow uses OIDC, so it does not need an `NPM_TOKEN` secret. On its first run, it verifies that the repository version matches npm's `latest` and initializes the matching Git release tag as a baseline.
+
 ## Configuration
 
 ```bash

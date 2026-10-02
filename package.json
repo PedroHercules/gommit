@@ -32,6 +32,9 @@
     "url": "https://github.com/PedroHercules/gommit/issues"
   },
   "homepage": "https://github.com/PedroHercules/gommit#readme",
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=12.0.0"
   },

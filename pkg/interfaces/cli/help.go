@@ -2,6 +2,8 @@ package cli
 
 import "fmt"
 
+var version = "dev"
+
 // showHelp displays the main help message.
 func (c *CLI) showHelp() error {
 	fmt.Println(`
@@ -101,8 +103,8 @@ NOTES:
 
 // showVersion displays version information.
 func (c *CLI) showVersion() error {
-	fmt.Println(`
-Gommit v1.0.0
+	fmt.Printf(`
+Gommit v%s
 
 AI-Powered Git Commit Message Generator
 
@@ -112,7 +114,7 @@ Built with:
 
 Author: Pedro Hercules
 License: MIT
-Repository: https://github.com/PedroHercules/gommit`)
+Repository: https://github.com/PedroHercules/gommit`, version)
 
 	return nil
 }

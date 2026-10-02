@@ -3,10 +3,10 @@
 .PHONY: build clean test install help
 
 # Variáveis
-VERSION := 1.0.0
+VERSION ?= $(shell node -p "require('./package.json').version")
 BINARY_NAME := gmit
 BIN_DIR := bin
-LDFLAGS := -s -w -X main.version=$(VERSION)
+LDFLAGS := -s -w -X github.com/PedroHercules/gommit/pkg/interfaces/cli.version=$(VERSION)
 
 # Build padrão (sistema atual)
 build:
@@ -29,6 +29,8 @@ build-all:
 	GOOS=darwin GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)-darwin-arm64 .
 	@echo "Compilando para windows/amd64..."
 	GOOS=windows GOARCH=amd64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)-windows-amd64.exe .
+	@echo "Compilando para windows/arm64..."
+	GOOS=windows GOARCH=arm64 go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME)-windows-arm64.exe .
 	@echo "✓ Build concluído para todas as plataformas!"
 	@ls -lh $(BIN_DIR)/$(BINARY_NAME)-*
 

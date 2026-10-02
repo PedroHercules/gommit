@@ -1,5 +1,6 @@
 .env.test
 .env
+node_modules/
 # build file
 gmit
 
