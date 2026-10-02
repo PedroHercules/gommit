@@ -176,20 +176,20 @@ func renderModelPicker(output io.Writer, models []repositories.LLMModel, query s
 		end = len(models)
 	}
 
-	if _, err := fmt.Fprint(output, "\x1b[2J\x1b[HOpenRouter models\n"); err != nil {
+	if _, err := fmt.Fprint(output, "\x1b[2J\x1b[HOpenRouter models\r\n"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(output, "OpenRouter controls pricing and billing; Gommit cannot limit charges. Prefer free models."); err != nil {
+	if _, err := fmt.Fprint(output, "OpenRouter controls pricing and billing; Gommit cannot limit charges. Prefer free models.\r\n"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(output, "Search: %s\n", query); err != nil {
+	if _, err := fmt.Fprintf(output, "Search: %s\r\n", query); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(output, "Matches: %d | Type to filter | ↑/↓ navigate | Enter select | Esc cancel\n\n", len(models)); err != nil {
+	if _, err := fmt.Fprintf(output, "Matches: %d | Type to filter | ↑/↓ navigate | Enter select | Esc cancel\r\n\r\n", len(models)); err != nil {
 		return err
 	}
 	if len(models) == 0 {
-		_, err := fmt.Fprintln(output, "  No matching models")
+		_, err := fmt.Fprint(output, "  No matching models\r\n")
 		return err
 	}
 	for index := start; index < end; index++ {
@@ -209,7 +209,7 @@ func renderModelPicker(output io.Writer, models []repositories.LLMModel, query s
 		} else {
 			line += fmt.Sprintf(" | $%.6f/$%.6f per 1K tokens", model.PromptCostPer1K, model.CompletionCostPer1K)
 		}
-		_, err := fmt.Fprintln(output, truncateModelPickerLine(line, width))
+		_, err := fmt.Fprint(output, truncateModelPickerLine(line, width)+"\r\n")
 		if err != nil {
 			return err
 		}

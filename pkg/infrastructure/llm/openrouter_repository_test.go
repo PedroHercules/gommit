@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/PedroHercules/gommit/pkg/domain/entities"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -116,6 +118,131 @@ func TestGetBestModelSelectsOnlyFreeModels(t *testing.T) {
 	})
 }
 
+func TestGenerateCommitMessageNormalizesCompletionFormats(t *testing.T) {
+	fence := strings.Repeat("`", 3)
+	tests := []struct {
+		name      string
+		body      string
+		wantText  string
+		wantModel string
+	}{
+		{
+			name:      "string with markdown fence and label",
+			body:      strings.ReplaceAll(`{"model":"provider/model","choices":[{"finish_reason":"stop","message":{"content":"FENCEtext\nCommit message: feat: add feature.\nFENCE"}}],"usage":{"total_tokens":9}}`, "FENCE", fence),
+			wantText:  "feat: add feature",
+			wantModel: "provider/model",
+		},
+		{
+			name:      "text content blocks",
+			body:      `{"choices":[{"finish_reason":"stop","message":{"content":[{"type":"text","text":"feat: add feature"},{"type":"text","text":"- add detail"}]}}]}`,
+			wantText:  "feat: add feature\n- add detail",
+			wantModel: "provider/requested-model",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo, _ := repositoryWithCompletion(http.StatusOK, tt.body)
+			response, err := repo.GenerateCommitMessage(&entities.GitDiff{Content: "diff --git a/file b/file", IsEmpty: false}, "provider/requested-model")
+			if err != nil {
+				t.Fatalf("GenerateCommitMessage() error = %v", err)
+			}
+			if !response.Success || response.Message != tt.wantText {
+				t.Fatalf("GenerateCommitMessage() = %+v, want successful message %q", response, tt.wantText)
+			}
+			if response.Model != tt.wantModel {
+				t.Fatalf("response model = %q, want %q", response.Model, tt.wantModel)
+			}
+		})
+	}
+}
+
+func TestGeneratePRDescriptionUsesSharedContentNormalization(t *testing.T) {
+	fence := strings.Repeat("`", 3)
+	body := strings.ReplaceAll(`{"choices":[{"finish_reason":"stop","message":{"content":[{"type":"text","text":"FENCEmarkdown\nPR description:\n## Summary\nUpdated the parser.\nFENCE"}]}}]}`, "FENCE", fence)
+	repo, _ := repositoryWithCompletion(http.StatusOK, body)
+	response, err := repo.GeneratePRDescription(&entities.GitDiff{Content: "diff --git a/file b/file", IsEmpty: false}, "provider/model")
+	if err != nil {
+		t.Fatalf("GeneratePRDescription() error = %v", err)
+	}
+	if !response.Success || response.Message != "## Summary\nUpdated the parser." {
+		t.Fatalf("GeneratePRDescription() = %+v, want normalized markdown description", response)
+	}
+}
+
+func TestGenerateCommitMessageReturnsActionableErrorsWithoutRetry(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		wantParts  []string
+	}{
+		{
+			name:       "provider error envelope",
+			statusCode: http.StatusBadGateway,
+			body:       `{"error":{"code":502,"message":"Provider returned error: no gmit commit","metadata":{"provider_name":"ExampleProvider"}}}`,
+			wantParts:  []string{"HTTP 502", "ExampleProvider", "no gmit commit"},
+		},
+		{
+			name:       "provider error in successful http response",
+			statusCode: http.StatusOK,
+			body:       `{"error":{"code":"provider_error","message":"Provider returned error: no gmit commit","metadata":{"provider_name":"ExampleProvider"}}}`,
+			wantParts:  []string{"provider_error", "ExampleProvider", "no gmit commit"},
+		},
+		{
+			name:       "no choices",
+			statusCode: http.StatusOK,
+			body:       `{"choices":[]}`,
+			wantParts:  []string{"no completion choices"},
+		},
+		{
+			name:       "empty text",
+			statusCode: http.StatusOK,
+			body:       `{"choices":[{"message":{"content":"  "}}]}`,
+			wantParts:  []string{"empty completion"},
+		},
+		{
+			name:       "truncated response",
+			statusCode: http.StatusOK,
+			body:       `{"choices":[{"finish_reason":"length","message":{"content":"feat: incomplete"}}]}`,
+			wantParts:  []string{"truncated", "token limit"},
+		},
+		{
+			name:       "unsupported content type",
+			statusCode: http.StatusOK,
+			body:       `{"choices":[{"message":{"content":42}}]}`,
+			wantParts:  []string{"unsupported completion content format"},
+		},
+		{
+			name:       "non-json http error",
+			statusCode: http.StatusServiceUnavailable,
+			body:       "provider temporarily unavailable",
+			wantParts:  []string{"HTTP 503", "provider temporarily unavailable"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo, requestCount := repositoryWithCompletion(tt.statusCode, tt.body)
+			response, err := repo.GenerateCommitMessage(&entities.GitDiff{Content: "diff --git a/file b/file", IsEmpty: false}, "provider/model")
+			if err != nil {
+				t.Fatalf("GenerateCommitMessage() error = %v", err)
+			}
+			if response.Success || response.Error == "" {
+				t.Fatalf("expected a failed response with details, got %+v", response)
+			}
+			for _, part := range tt.wantParts {
+				if !strings.Contains(response.Error, part) {
+					t.Errorf("error %q does not include %q", response.Error, part)
+				}
+			}
+			if *requestCount != 1 {
+				t.Fatalf("request count = %d, want exactly one attempt", *requestCount)
+			}
+		})
+	}
+}
+
 func repositoryWithCatalog(catalog string) *OpenRouterRepository {
 	repo := NewOpenRouterRepository("")
 	repo.baseURL = "https://openrouter.test/api/v1"
@@ -126,4 +253,18 @@ func repositoryWithCatalog(catalog string) *OpenRouterRepository {
 		}, nil
 	})}
 	return repo
+}
+
+func repositoryWithCompletion(statusCode int, body string) (*OpenRouterRepository, *int) {
+	repo := NewOpenRouterRepository("test-key")
+	repo.baseURL = "https://openrouter.test/api/v1"
+	requestCount := 0
+	repo.httpClient = &http.Client{Transport: roundTripFunc(func(_ *http.Request) (*http.Response, error) {
+		requestCount++
+		return &http.Response{
+			StatusCode: statusCode,
+			Body:       io.NopCloser(strings.NewReader(body)),
+		}, nil
+	})}
+	return repo, &requestCount
 }

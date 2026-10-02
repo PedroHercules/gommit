@@ -56,6 +56,11 @@ func TestRunModelPickerFiltersAndSelectsWithArrowKeys(t *testing.T) {
 	if !strings.Contains(output.String(), "Search: free") || !strings.Contains(output.String(), "Prefer free models") {
 		t.Fatalf("picker output does not show search field and cost notice: %s", output.String())
 	}
+	for index, char := range output.String() {
+		if char == '\n' && (index == 0 || output.String()[index-1] != '\r') {
+			t.Fatal("picker output contains a bare line feed; raw terminals need CRLF to return to column zero")
+		}
+	}
 }
 
 func TestRunModelPickerCancelsOnEscape(t *testing.T) {

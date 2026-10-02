@@ -56,17 +56,49 @@ type openRouterMessage struct {
 // openRouterResponse represents the response from OpenRouter API.
 type openRouterResponse struct {
 	Choices []struct {
-		Message struct {
-			Content string `json:"content"`
-		} `json:"message"`
+		Message      openRouterCompletionMessage `json:"message"`
+		Error        *openRouterAPIError         `json:"error,omitempty"`
+		FinishReason string                      `json:"finish_reason"`
 	} `json:"choices"`
 	Usage struct {
 		TotalTokens int `json:"total_tokens"`
 	} `json:"usage"`
-	Model string `json:"model"`
-	Error *struct {
-		Message string `json:"message"`
-	} `json:"error,omitempty"`
+	Model string              `json:"model"`
+	Error *openRouterAPIError `json:"error,omitempty"`
+}
+
+type openRouterCompletionMessage struct {
+	Content json.RawMessage `json:"content"`
+	Refusal string          `json:"refusal,omitempty"`
+}
+
+type openRouterAPIError struct {
+	Code     json.RawMessage `json:"code,omitempty"`
+	Message  string          `json:"message"`
+	Metadata struct {
+		ProviderName string `json:"provider_name"`
+	} `json:"metadata,omitempty"`
+}
+
+func (e *openRouterAPIError) Error() string {
+	if e == nil {
+		return "OpenRouter returned an unspecified error"
+	}
+
+	var details []string
+	if len(e.Code) > 0 && string(e.Code) != "null" {
+		details = append(details, "code "+string(e.Code))
+	}
+	if e.Metadata.ProviderName != "" {
+		details = append(details, "provider "+e.Metadata.ProviderName)
+	}
+	if e.Message != "" {
+		details = append(details, strings.TrimSpace(e.Message))
+	}
+	if len(details) == 0 {
+		return "OpenRouter returned an unspecified error"
+	}
+	return "OpenRouter error: " + strings.Join(details, "; ")
 }
 
 // openRouterModelsResponse represents the response from the models endpoint.
@@ -119,40 +151,7 @@ func (r *OpenRouterRepository) GenerateCommitMessage(diff *entities.GitDiff, mod
 		MaxTokens: 150, // Commit messages should be concise
 	}
 
-	// Make the API call
-	response, err := r.makeAPICall(request)
-	if err != nil {
-		return &repositories.LLMResponse{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
-	}
-
-	if response.Error != nil {
-		return &repositories.LLMResponse{
-			Success: false,
-			Error:   response.Error.Message,
-		}, nil
-	}
-
-	if len(response.Choices) == 0 {
-		return &repositories.LLMResponse{
-			Success: false,
-			Error:   "no response from LLM",
-		}, nil
-	}
-
-	// Extract and clean the commit message
-	commitMessage := strings.TrimSpace(response.Choices[0].Message.Content)
-	commitMessage = r.cleanCommitMessage(commitMessage)
-
-	return &repositories.LLMResponse{
-		Message:     commitMessage,
-		Model:       response.Model,
-		TokensUsed:  response.Usage.TotalTokens,
-		ContextSize: 0, // OpenRouter doesn't provide this in the response
-		Success:     true,
-	}, nil
+	return r.generate(request, modelToUse, r.cleanCommitMessage), nil
 }
 
 // GeneratePRDescription generates a PR description based on the git diff.
@@ -196,40 +195,92 @@ func (r *OpenRouterRepository) GeneratePRDescription(diff *entities.GitDiff, mod
 		MaxTokens: 300, // PR descriptions can be longer
 	}
 
-	// Make the API call
+	return r.generate(request, modelToUse, r.cleanPRDescription), nil
+}
+
+func (r *OpenRouterRepository) generate(request openRouterRequest, requestedModel string, clean func(string) string) *repositories.LLMResponse {
 	response, err := r.makeAPICall(request)
 	if err != nil {
-		return &repositories.LLMResponse{
-			Success: false,
-			Error:   err.Error(),
-		}, nil
+		return failedLLMResponse(err)
 	}
-
 	if response.Error != nil {
-		return &repositories.LLMResponse{
-			Success: false,
-			Error:   response.Error.Message,
-		}, nil
+		return failedLLMResponse(response.Error)
 	}
-
 	if len(response.Choices) == 0 {
-		return &repositories.LLMResponse{
-			Success: false,
-			Error:   "no response from LLM",
-		}, nil
+		return failedLLMResponse(errors.New("OpenRouter returned no completion choices"))
 	}
 
-	// Extract and clean the PR description
-	prDescription := strings.TrimSpace(response.Choices[0].Message.Content)
-	prDescription = r.cleanPRDescription(prDescription)
+	choice := response.Choices[0]
+	if choice.Error != nil {
+		return failedLLMResponse(choice.Error)
+	}
+	if choice.Message.Refusal != "" {
+		return failedLLMResponse(fmt.Errorf("model refused the request: %s", strings.TrimSpace(choice.Message.Refusal)))
+	}
+	if strings.EqualFold(choice.FinishReason, "length") || strings.EqualFold(choice.FinishReason, "max_tokens") {
+		return failedLLMResponse(errors.New("model response was truncated because it reached the token limit"))
+	}
 
+	content, err := extractCompletionText(choice.Message.Content)
+	if err != nil {
+		return failedLLMResponse(err)
+	}
+	message := clean(content)
+	if message == "" {
+		return failedLLMResponse(errors.New("OpenRouter returned an empty completion"))
+	}
+
+	model := response.Model
+	if model == "" {
+		model = requestedModel
+	}
 	return &repositories.LLMResponse{
-		Message:     prDescription,
-		Model:       response.Model,
+		Message:     message,
+		Model:       model,
 		TokensUsed:  response.Usage.TotalTokens,
-		ContextSize: 0, // OpenRouter doesn't provide this in the response
+		ContextSize: 0,
 		Success:     true,
-	}, nil
+	}
+}
+
+func failedLLMResponse(err error) *repositories.LLMResponse {
+	return &repositories.LLMResponse{Success: false, Error: err.Error()}
+}
+
+func extractCompletionText(content json.RawMessage) (string, error) {
+	content = bytes.TrimSpace(content)
+	if len(content) == 0 || bytes.Equal(content, []byte("null")) {
+		return "", nil
+	}
+
+	var text string
+	if err := json.Unmarshal(content, &text); err == nil {
+		return text, nil
+	}
+
+	var parts []struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(content, &parts); err == nil {
+		texts := make([]string, 0, len(parts))
+		for _, part := range parts {
+			if part.Text != "" && (part.Type == "" || part.Type == "text") {
+				texts = append(texts, part.Text)
+			}
+		}
+		return strings.Join(texts, "\n"), nil
+	}
+
+	var part struct {
+		Type string `json:"type"`
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(content, &part); err == nil && part.Text != "" && (part.Type == "" || part.Type == "text") {
+		return part.Text, nil
+	}
+
+	return "", errors.New("OpenRouter returned an unsupported completion content format")
 }
 
 // GetAvailableModels returns a list of available LLM models.
@@ -497,15 +548,7 @@ Git diff:
 
 // cleanCommitMessage cleans and formats the generated commit message.
 func (r *OpenRouterRepository) cleanCommitMessage(message string) string {
-	// Remove common prefixes that LLMs might add
-	message = strings.TrimPrefix(message, "Commit message: ")
-	message = strings.TrimPrefix(message, "commit: ")
-	message = strings.TrimPrefix(message, "Commit: ")
-
-	// Remove quotes if the entire message is quoted
-	if strings.HasPrefix(message, `"`) && strings.HasSuffix(message, `"`) {
-		message = strings.Trim(message, `"`)
-	}
+	message = cleanGeneratedText(message, "commit message:", "commit:", "generated commit message:")
 
 	// Remove any trailing periods from the summary line
 	lines := strings.Split(message, "\n")
@@ -518,17 +561,38 @@ func (r *OpenRouterRepository) cleanCommitMessage(message string) string {
 }
 
 func (r *OpenRouterRepository) cleanPRDescription(description string) string {
-	// Remove common prefixes that LLMs might add
-	description = strings.TrimPrefix(description, "Pull request description: ")
-	description = strings.TrimPrefix(description, "pr description: ")
-	description = strings.TrimPrefix(description, "PR description: ")
+	return cleanGeneratedText(description, "pull request description:", "pr description:", "generated pr description:")
+}
 
-	// Remove quotes if the entire message is quoted
-	if strings.HasPrefix(description, `"`) && strings.HasSuffix(description, `"`) {
-		description = strings.Trim(description, `"`)
+func cleanGeneratedText(text string, labels ...string) string {
+	text = strings.TrimSpace(text)
+	text = stripWrappingQuotes(text)
+	if strings.HasPrefix(text, "```") {
+		if lineEnd := strings.IndexByte(text, '\n'); lineEnd >= 0 {
+			text = text[lineEnd+1:]
+		} else {
+			text = strings.TrimPrefix(text, "```")
+		}
+		if fenceEnd := strings.LastIndex(text, "```"); fenceEnd >= 0 {
+			text = text[:fenceEnd]
+		}
+		text = strings.TrimSpace(text)
 	}
 
-	return strings.TrimSpace(description)
+	for _, label := range labels {
+		if len(text) >= len(label) && strings.EqualFold(text[:len(label)], label) {
+			text = strings.TrimSpace(text[len(label):])
+			break
+		}
+	}
+	return strings.TrimSpace(stripWrappingQuotes(text))
+}
+
+func stripWrappingQuotes(text string) string {
+	if len(text) >= 2 && strings.HasPrefix(text, `"`) && strings.HasSuffix(text, `"`) {
+		return strings.TrimSpace(strings.Trim(text, `"`))
+	}
+	return text
 }
 
 // makeAPICall makes an HTTP request to the OpenRouter API.
@@ -561,8 +625,26 @@ func (r *OpenRouterRepository) makeAPICall(request openRouterRequest) (*openRout
 
 	var response openRouterResponse
 	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+			return nil, fmt.Errorf("OpenRouter returned HTTP %d with an unreadable response: %s", resp.StatusCode, truncateErrorBody(body, 512))
+		}
+		return nil, fmt.Errorf("failed to parse OpenRouter response: %w", err)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		if response.Error != nil {
+			return nil, fmt.Errorf("OpenRouter returned HTTP %d: %w", resp.StatusCode, response.Error)
+		}
+		return nil, fmt.Errorf("OpenRouter returned HTTP %d: %s", resp.StatusCode, truncateErrorBody(body, 512))
 	}
 
 	return &response, nil
+}
+
+func truncateErrorBody(body []byte, limit int) string {
+	text := strings.TrimSpace(string(body))
+	runes := []rune(text)
+	if len(runes) > limit {
+		return string(runes[:limit]) + "…"
+	}
+	return text
 }
