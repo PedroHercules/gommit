@@ -158,14 +158,14 @@ func TestGenerateCommitMessageNormalizesCompletionFormats(t *testing.T) {
 	}
 }
 
-func TestGenerateCommitMessageAllowsEnoughCompletionTokens(t *testing.T) {
+func TestGenerateCommitMessageDoesNotSetCompletionTokenLimit(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		var request openRouterRequest
+		var request map[string]json.RawMessage
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 			t.Fatalf("decode request: %v", err)
 		}
-		if request.MaxCompletionTokens != 1024 {
-			t.Errorf("max_completion_tokens = %d, want 1024", request.MaxCompletionTokens)
+		if _, hasLimit := request["max_completion_tokens"]; hasLimit {
+			t.Error("request should leave the completion token limit to OpenRouter")
 		}
 		return &http.Response{
 			StatusCode: http.StatusOK,
