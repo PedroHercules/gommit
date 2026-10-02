@@ -24,8 +24,9 @@ npm install -g gmit
 # Configure your OpenRouter API key
 gmit config set-key sk-or-v1-your-key-here
 
-# (Optional) Set a default model
-gmit config set-model claude-3-sonnet
+# (Optional) List models, then set any model ID from OpenRouter
+gmit config list-models
+gmit config set-model <model-id>
 
 # Check configuration
 gmit config summary
@@ -33,19 +34,19 @@ gmit config summary
 
 ## 💰 API Costs and Usage
 
-**Important**: Each user is responsible for their own OpenRouter API costs. Please monitor your usage carefully:
+**Important**: Model requests are billed by OpenRouter according to the selected model and its current pricing. Gommit does not control provider pricing, charge your account, or limit your usage. You are responsible for all charges and should check pricing before using a model.
 
-- **Free Models Available**: Gmit is configured to use free models by default (like `meta-llama/llama-3.2-3b-instruct:free`)
+- **Recommended**: Choose free models when configuring Gommit; these are commonly marked with `:free` and are labeled in `gmit config list-models` when OpenRouter reports zero pricing.
 - **Cost Monitoring**: Check your usage at [OpenRouter Dashboard](https://openrouter.ai/activity)
 - **Rate Limits**: Free models have usage limits - monitor to avoid interruptions
-- **Paid Models**: If you choose paid models, costs vary from $0.001 to $0.10+ per request
+- **Paid Models**: Costs vary by model and can change. Review OpenRouter's current pricing before using a paid model.
 - **Usage Tips**:
   - Use `--dry-run` to preview without committing
   - Prefer free models for regular use
   - Monitor your monthly usage
   - Set up billing alerts in OpenRouter
 
-> ⚠️ **Disclaimer**: The developers of Gmit are not responsible for any API costs incurred. Users should monitor their own usage and set appropriate limits.
+> ⚠️ **Disclaimer**: Gommit does not control or cap OpenRouter costs. Users are responsible for checking prices, monitoring usage, and setting any available limits in their OpenRouter account.
 
 ## Usage
 
@@ -58,8 +59,8 @@ gmit commit --commit
 # Only generate the message (dry run)
 gmit commit --dry-run
 
-# Use a specific model
-gmit commit --model claude-3-sonnet
+# Use a model from the OpenRouter catalog
+gmit commit --model <model-id>
 
 # Interactive mode with confirmation
 gmit commit
@@ -79,8 +80,8 @@ gmit pr --base-branch develop
 # Generate PR with custom target branch
 gmit pr --base-branch main
 
-# Use specific AI model for PR generation
-gmit pr --model claude-3-haiku --base-branch develop
+# Use a model from the OpenRouter catalog for PR generation
+gmit pr --model <model-id> --base-branch develop
 ```
 
 #### How PR Generation Works
@@ -139,15 +140,15 @@ gmit config help
 
 ## Supported AI Models
 
-Gmit supports the following AI models by default:
+Gmit fetches the current model catalog from OpenRouter. Use `gmit config list-models` to see available model IDs and published pricing, then choose any listed ID:
 
-- **deepseek/deepseek-chat-v3.1:free** (default) - 32k context, stable and accurate
-- **nvidia/llama-3.1-nemotron-70b-instruct** (alternative) - High-performance model optimized for code understanding
-
-To use other models available through OpenRouter, set them as default using:
 ```bash
-gmit config set-model <model-name>
+gmit config set-model <model-id>
 ```
+
+In an interactive terminal, `gmit config list-models` opens a searchable list. Type to filter by model ID, name, or provider, use the arrow keys to move through results, then press Enter to save the selection as the default model. Without an interactive terminal, the command prints the full catalog.
+
+Prefer free models. OpenRouter controls pricing and billing, and Gommit cannot limit charges. The catalog's prices may change; check OpenRouter before selecting a paid model.
 
 ## Examples
 

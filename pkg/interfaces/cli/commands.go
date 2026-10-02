@@ -12,6 +12,7 @@ import (
 	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
 	config_services "github.com/PedroHercules/gommit/pkg/application/services/config"
 	pr_services "github.com/PedroHercules/gommit/pkg/application/services/pull-request"
+	"golang.org/x/term"
 )
 
 // CLI represents the command-line interface.
@@ -324,6 +325,7 @@ func (c *CLI) handleSetModel(args []string) error {
 	}
 
 	fmt.Printf("Success: %s\n", resp.Message)
+	fmt.Println("Cost notice: OpenRouter controls model pricing and billing; Gommit cannot limit your charges. Prefer a free model (often marked :free).")
 	return nil
 }
 
@@ -375,22 +377,34 @@ func (c *CLI) handleListModels() error {
 		return nil
 	}
 
-	fmt.Printf("\nAvailable Models (%d):\n\n", len(resp.Models))
-	for _, model := range resp.Models {
-		fmt.Printf("  - %s\n", model.ID)
-		if model.Name != "" {
-			fmt.Printf("    Name: %s\n", model.Name)
-		}
-		if model.Provider != "" {
-			fmt.Printf("    Provider: %s\n", model.Provider)
-		}
-		if model.ContextSize > 0 {
-			fmt.Printf("    Context: %d tokens\n", model.ContextSize)
-		}
-		fmt.Println()
+	stdinFD := int(os.Stdin.Fd())
+	stdoutFD := int(os.Stdout.Fd())
+	if !term.IsTerminal(stdinFD) || !term.IsTerminal(stdoutFD) {
+		return printModels(os.Stdout, resp.Models)
 	}
 
-	return nil
+	state, err := term.MakeRaw(stdinFD)
+	if err != nil {
+		return fmt.Errorf("failed to start interactive model search: %w", err)
+	}
+	width, height, err := term.GetSize(stdoutFD)
+	if err != nil {
+		width, height = 80, 24
+	}
+	selectedModel, pickerErr := runModelPicker(resp.Models, os.Stdin, os.Stdout, width, height)
+	restoreErr := term.Restore(stdinFD, state)
+	if restoreErr != nil {
+		return fmt.Errorf("failed to restore terminal: %w", restoreErr)
+	}
+	if pickerErr != nil {
+		return fmt.Errorf("model search failed: %w", pickerErr)
+	}
+	fmt.Fprintln(os.Stdout)
+	if selectedModel == "" {
+		fmt.Println("Model selection cancelled")
+		return nil
+	}
+	return c.handleSetModel([]string{selectedModel})
 }
 
 // handleConfigSummary processes the config summary command.

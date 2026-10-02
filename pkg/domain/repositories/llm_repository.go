@@ -7,12 +7,16 @@ import (
 
 // LLMModel represents information about an available LLM model.
 type LLMModel struct {
-	ID          string  // Model identifier (e.g., "openai/gpt-4o-mini")
-	Name        string  // Human-readable name
-	Provider    string  // Provider name (e.g., "OpenAI", "Anthropic")
-	ContextSize int     // Maximum context size in tokens
-	CostPer1K   float64 // Cost per 1K tokens (for selection logic)
-	Available   bool    // Whether the model is currently available
+	ID                  string  // Model identifier (e.g., "openai/gpt-4o-mini")
+	Name                string  // Human-readable name
+	Provider            string  // Provider name (e.g., "OpenAI", "Anthropic")
+	ContextSize         int     // Maximum context size in tokens
+	CostPer1K           float64 // Cost per 1K tokens (for selection logic)
+	PromptCostPer1K     float64 // Prompt token cost per 1K tokens
+	CompletionCostPer1K float64 // Completion token cost per 1K tokens
+	PricingAvailable    bool    // Whether OpenRouter provided both token prices
+	Free                bool    // Whether both prompt and completion prices are zero
+	Available           bool    // Whether the model is currently available
 }
 
 // LLMResponse represents the response from an LLM service.

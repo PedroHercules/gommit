@@ -34,17 +34,17 @@ CONFIG COMMANDS:
     config set-model <model> Set default AI model
     config get-model         Show current default model
     config remove-model      Remove default model
-    config list-models       List available AI models
+    config list-models       Search and select an OpenRouter model
     config summary           Show configuration summary
     config validate          Validate current configuration
 
 EXAMPLES:
     gommit commit                           # Generate message and commit
-    gommit commit --model claude-3-sonnet   # Use specific model
+    gommit commit --model provider/model-id # Use a model from OpenRouter
     gommit pr                               # Generate PR description
     gommit pr --base-branch develop         # Generate PR against develop branch
     gommit config set-key sk-xxx            # Set API key
-    gommit config list-models               # See available models
+    gommit config list-models               # Search and select a model
     gommit config summary                   # Show configuration summary   
     gommit validate "feat: add new feature"  # Validate message
 
@@ -53,6 +53,7 @@ NOTES:
     • Works with staged Git changes
     • Supports Conventional Commits format
     • Configuration is stored securely
+    • OpenRouter controls model costs and billing; prefer free models
 
 For more information, visit: https://github.com/PedroHercules/gommit`)
 
@@ -74,14 +75,14 @@ COMMANDS:
     set-model <model> Set default AI model
     get-model         Show current default model
     remove-model      Remove default model setting
-    list-models       List all available AI models
+    list-models       Search and select an OpenRouter model
     summary           Show complete configuration summary
     validate          Validate current configuration
 
 EXAMPLES:
     gommit config set-key sk-or-v1-xxx...        # Set API key
-    gommit config set-model claude-3-sonnet      # Set default model
-    gommit config list-models                    # See all models
+    gommit config set-model provider/model-id    # Set default model
+    gommit config list-models                    # Search and select a model
     gommit config summary                        # Check all settings
     gommit config validate                       # Test configuration
 
@@ -89,7 +90,11 @@ NOTES:
     • API key is stored securely in system keyring
     • Default model is used when --model is not specified
     • Configuration is validated before use
-    • Some commands require valid API key`)
+    • Some commands require valid API key
+    • OpenRouter controls model costs and billing; Gommit cannot limit charges
+    • Prefer free models, often marked with :free
+    • In an interactive terminal, list-models filters while you type; Enter saves the selected model as default
+    • Without an interactive terminal, list-models prints the full catalog`)
 
 	return nil
 }

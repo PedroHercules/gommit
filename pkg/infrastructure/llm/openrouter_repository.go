@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -232,27 +234,81 @@ func (r *OpenRouterRepository) GeneratePRDescription(diff *entities.GitDiff, mod
 
 // GetAvailableModels returns a list of available LLM models.
 func (r *OpenRouterRepository) GetAvailableModels() ([]repositories.LLMModel, error) {
-	// Return predefined models - stable and reliable models first
-	models := []repositories.LLMModel{
-		{
-			ID:          "deepseek/deepseek-chat-v3.1:free",
-			Name:        "DeepSeek Chat v3.1 (Free)",
-			Provider:    "DeepSeek",
-			ContextSize: 32768,
-			Available:   true,
-		},
-		{
-			ID:          "nvidia/nemotron-nano-9b-v2:free",
-			Name:        "Nvidia Nemotron Nano 9B V2 (Free)",
-			Provider:    "Nvidia",
-			ContextSize: 128000,
-			Available:   true,
-		},
+	requestURL := r.baseURL + "/models"
+	req, err := http.NewRequest(http.MethodGet, requestURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create models request: %w", err)
 	}
+	if r.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+r.apiKey)
+	}
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch OpenRouter models: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read OpenRouter models response: %w", err)
+	}
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("OpenRouter models request failed with status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var catalog openRouterModelsResponse
+	if err := json.Unmarshal(body, &catalog); err != nil {
+		return nil, fmt.Errorf("failed to parse OpenRouter models response: %w", err)
+	}
+
+	models := make([]repositories.LLMModel, 0, len(catalog.Data))
+	for _, item := range catalog.Data {
+		if item.ID == "" {
+			continue
+		}
+		promptPrice, promptOK := parseModelPrice(item.Pricing.Prompt)
+		completionPrice, completionOK := parseModelPrice(item.Pricing.Completion)
+		model := repositories.LLMModel{
+			ID:               item.ID,
+			Name:             item.Name,
+			Provider:         modelProvider(item.ID),
+			ContextSize:      item.Context,
+			Available:        true,
+			PricingAvailable: promptOK && completionOK,
+		}
+		if model.PricingAvailable {
+			model.PromptCostPer1K = promptPrice * 1000
+			model.CompletionCostPer1K = completionPrice * 1000
+			model.CostPer1K = (model.PromptCostPer1K + model.CompletionCostPer1K) / 2
+			model.Free = promptPrice == 0 && completionPrice == 0
+		}
+		models = append(models, model)
+	}
+	sort.Slice(models, func(i, j int) bool { return models[i].ID < models[j].ID })
 
 	// Cache the models
 	r.models = models
 	return models, nil
+}
+
+func parseModelPrice(value string) (float64, bool) {
+	if value == "" {
+		return 0, false
+	}
+	price, err := strconv.ParseFloat(value, 64)
+	if err != nil || price < 0 {
+		return 0, false
+	}
+	return price, true
+}
+
+func modelProvider(modelID string) string {
+	provider, _, found := strings.Cut(modelID, "/")
+	if !found {
+		return ""
+	}
+	return provider
 }
 
 // ValidateModel checks if a model ID is valid and available.
@@ -290,20 +346,21 @@ func (r *OpenRouterRepository) GetBestModel() (*repositories.LLMModel, error) {
 
 	for _, preferred := range preferredModels {
 		for _, model := range models {
-			if model.ID == preferred && model.Available {
+			if model.ID == preferred && model.Available && model.Free {
 				return &model, nil
 			}
 		}
 	}
 
-	// Fallback to the first available model
+	// Fall back to another free model, keeping automatic selection from
+	// unexpectedly choosing a model that may incur charges.
 	for _, model := range models {
-		if model.Available {
+		if model.Available && model.Free {
 			return &model, nil
 		}
 	}
 
-	return nil, errors.New("no available models found")
+	return nil, errors.New("no free models available; choose a model explicitly with --model or config set-model, and check its OpenRouter pricing")
 }
 
 // TestConnection tests the connection to the LLM service.
