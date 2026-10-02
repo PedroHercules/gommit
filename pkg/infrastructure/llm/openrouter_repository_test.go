@@ -180,8 +180,8 @@ func TestGenerateCommitMessageReturnsActionableErrorsWithoutRetry(t *testing.T) 
 		{
 			name:       "provider error envelope",
 			statusCode: http.StatusBadGateway,
-			body:       `{"error":{"code":502,"message":"Provider returned error: no gmit commit","metadata":{"provider_name":"ExampleProvider"}}}`,
-			wantParts:  []string{"HTTP 502", "ExampleProvider", "no gmit commit"},
+			body:       `{"error":{"code":502,"message":"Provider returned error","metadata":{"provider_name":"ExampleProvider","raw":"model is temporarily rate-limited upstream"}}}`,
+			wantParts:  []string{"HTTP 502", "ExampleProvider", "Provider returned error", "temporarily rate-limited upstream"},
 		},
 		{
 			name:       "provider error in successful http response",

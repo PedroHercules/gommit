@@ -41,10 +41,10 @@ func NewOpenRouterRepository(apiKey string) *OpenRouterRepository {
 
 // openRouterRequest represents the request structure for OpenRouter API.
 type openRouterRequest struct {
-	Model     string              `json:"model"`
-	Messages  []openRouterMessage `json:"messages"`
-	Stream    bool                `json:"stream"`
-	MaxTokens int                 `json:"max_tokens,omitempty"`
+	Model               string              `json:"model"`
+	Messages            []openRouterMessage `json:"messages"`
+	Stream              bool                `json:"stream"`
+	MaxCompletionTokens int                 `json:"max_completion_tokens,omitempty"`
 }
 
 // openRouterMessage represents a message in the conversation.
@@ -76,7 +76,8 @@ type openRouterAPIError struct {
 	Code     json.RawMessage `json:"code,omitempty"`
 	Message  string          `json:"message"`
 	Metadata struct {
-		ProviderName string `json:"provider_name"`
+		ProviderName string          `json:"provider_name"`
+		Raw          json.RawMessage `json:"raw,omitempty"`
 	} `json:"metadata,omitempty"`
 }
 
@@ -94,6 +95,15 @@ func (e *openRouterAPIError) Error() string {
 	}
 	if e.Message != "" {
 		details = append(details, strings.TrimSpace(e.Message))
+	}
+	if len(e.Metadata.Raw) > 0 && string(e.Metadata.Raw) != "null" {
+		var rawMessage string
+		if err := json.Unmarshal(e.Metadata.Raw, &rawMessage); err != nil {
+			rawMessage = string(e.Metadata.Raw)
+		}
+		if rawMessage = truncateErrorBody([]byte(rawMessage), 512); rawMessage != "" {
+			details = append(details, "upstream details: "+rawMessage)
+		}
 	}
 	if len(details) == 0 {
 		return "OpenRouter returned an unspecified error"
@@ -147,8 +157,8 @@ func (r *OpenRouterRepository) GenerateCommitMessage(diff *entities.GitDiff, mod
 				Content: prompt,
 			},
 		},
-		Stream:    false,
-		MaxTokens: 150, // Commit messages should be concise
+		Stream:              false,
+		MaxCompletionTokens: 150, // Commit messages should be concise
 	}
 
 	return r.generate(request, modelToUse, r.cleanCommitMessage), nil
@@ -191,43 +201,47 @@ func (r *OpenRouterRepository) GeneratePRDescription(diff *entities.GitDiff, mod
 				Content: prompt,
 			},
 		},
-		Stream:    false,
-		MaxTokens: 300, // PR descriptions can be longer
+		Stream:              false,
+		MaxCompletionTokens: 300, // PR descriptions can be longer
 	}
 
 	return r.generate(request, modelToUse, r.cleanPRDescription), nil
 }
 
 func (r *OpenRouterRepository) generate(request openRouterRequest, requestedModel string, clean func(string) string) *repositories.LLMResponse {
+	fail := func(err error) *repositories.LLMResponse {
+		return failedLLMResponse(fmt.Errorf("model %q: %w", requestedModel, err))
+	}
+
 	response, err := r.makeAPICall(request)
 	if err != nil {
-		return failedLLMResponse(err)
+		return fail(err)
 	}
 	if response.Error != nil {
-		return failedLLMResponse(response.Error)
+		return fail(response.Error)
 	}
 	if len(response.Choices) == 0 {
-		return failedLLMResponse(errors.New("OpenRouter returned no completion choices"))
+		return fail(errors.New("OpenRouter returned no completion choices"))
 	}
 
 	choice := response.Choices[0]
 	if choice.Error != nil {
-		return failedLLMResponse(choice.Error)
+		return fail(choice.Error)
 	}
 	if choice.Message.Refusal != "" {
-		return failedLLMResponse(fmt.Errorf("model refused the request: %s", strings.TrimSpace(choice.Message.Refusal)))
+		return fail(fmt.Errorf("model refused the request: %s", strings.TrimSpace(choice.Message.Refusal)))
 	}
 	if strings.EqualFold(choice.FinishReason, "length") || strings.EqualFold(choice.FinishReason, "max_tokens") {
-		return failedLLMResponse(errors.New("model response was truncated because it reached the token limit"))
+		return fail(errors.New("model response was truncated because it reached the token limit"))
 	}
 
 	content, err := extractCompletionText(choice.Message.Content)
 	if err != nil {
-		return failedLLMResponse(err)
+		return fail(err)
 	}
 	message := clean(content)
 	if message == "" {
-		return failedLLMResponse(errors.New("OpenRouter returned an empty completion"))
+		return fail(errors.New("OpenRouter returned an empty completion"))
 	}
 
 	model := response.Model
