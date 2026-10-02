@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -154,6 +155,33 @@ func TestGenerateCommitMessageNormalizesCompletionFormats(t *testing.T) {
 				t.Fatalf("response model = %q, want %q", response.Model, tt.wantModel)
 			}
 		})
+	}
+}
+
+func TestGenerateCommitMessageAllowsEnoughCompletionTokens(t *testing.T) {
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		var request openRouterRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if request.MaxCompletionTokens != 1024 {
+			t.Errorf("max_completion_tokens = %d, want 1024", request.MaxCompletionTokens)
+		}
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       io.NopCloser(strings.NewReader(`{"choices":[{"finish_reason":"stop","message":{"content":"fix: improve commit generation"}}]}`)),
+		}, nil
+	})}
+	repo := NewOpenRouterRepository("test-key")
+	repo.baseURL = "https://openrouter.test/api/v1"
+	repo.httpClient = client
+
+	response, err := repo.GenerateCommitMessage(&entities.GitDiff{Content: "diff --git a/file b/file", IsEmpty: false}, "provider/model")
+	if err != nil {
+		t.Fatalf("GenerateCommitMessage() error = %v", err)
+	}
+	if !response.Success {
+		t.Fatalf("GenerateCommitMessage() failed: %+v", response)
 	}
 }
 

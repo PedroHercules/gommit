@@ -157,8 +157,9 @@ func (r *OpenRouterRepository) GenerateCommitMessage(diff *entities.GitDiff, mod
 				Content: prompt,
 			},
 		},
-		Stream:              false,
-		MaxCompletionTokens: 150, // Commit messages should be concise
+		Stream: false,
+		// Leave room for model reasoning and the required changed-files list.
+		MaxCompletionTokens: 1024,
 	}
 
 	return r.generate(request, modelToUse, r.cleanCommitMessage), nil
