@@ -13,7 +13,6 @@ import (
 	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
 	config_services "github.com/PedroHercules/gommit/pkg/application/services/config"
 	pr_services "github.com/PedroHercules/gommit/pkg/application/services/pull-request"
-	"github.com/PedroHercules/gommit/pkg/domain/repositories"
 	"golang.org/x/term"
 )
 
@@ -252,6 +251,10 @@ func (c *CLI) handleProviderSetup() error {
 	if err != nil {
 		return err
 	}
+	if providerChoice == "" {
+		fmt.Println("Setup cancelled")
+		return nil
+	}
 	provider := "openrouter"
 	authMethod := "api_key"
 	apiKey := ""
@@ -267,6 +270,10 @@ func (c *CLI) handleProviderSetup() error {
 		authChoice, choiceErr := promptChoice("Connect to Grok using", []string{"OAuth login", "xAI API key"})
 		if choiceErr != nil {
 			return choiceErr
+		}
+		if authChoice == "" {
+			fmt.Println("Setup cancelled")
+			return nil
 		}
 		if authChoice == "OAuth login" {
 			if err := ensureGrokCLI(); err != nil {
@@ -312,25 +319,6 @@ func (c *CLI) handleProviderSetup() error {
 	}
 	fmt.Printf("Configured %s with model %s\n", providerChoice, model)
 	return nil
-}
-
-func promptChoice(title string, options []string) (string, error) {
-	fmt.Printf("%s:\n", title)
-	for i, option := range options {
-		fmt.Printf("  %d) %s\n", i+1, option)
-	}
-	fmt.Print("Select an option: ")
-	answer, err := readTerminalLine()
-	if err != nil {
-		return "", err
-	}
-	answer = strings.TrimSpace(answer)
-	for i, option := range options {
-		if answer == fmt.Sprint(i+1) || strings.EqualFold(answer, option) {
-			return option, nil
-		}
-	}
-	return "", fmt.Errorf("invalid selection %q", answer)
 }
 
 func promptAPIKey(label string) (string, error) {
@@ -410,32 +398,6 @@ func promptYesNo(prompt string) (bool, error) {
 		return false, err
 	}
 	return strings.EqualFold(strings.TrimSpace(answer), "y") || strings.EqualFold(strings.TrimSpace(answer), "yes"), nil
-}
-
-func pickModel(models []repositories.LLMModel) (string, error) {
-	stdinFD := int(os.Stdin.Fd())
-	stdoutFD := int(os.Stdout.Fd())
-	if !term.IsTerminal(stdinFD) || !term.IsTerminal(stdoutFD) {
-		return "", fmt.Errorf("model selection requires an interactive terminal")
-	}
-	state, err := term.MakeRaw(stdinFD)
-	if err != nil {
-		return "", fmt.Errorf("failed to start model search: %w", err)
-	}
-	width, height, err := term.GetSize(stdoutFD)
-	if err != nil {
-		width, height = 80, 24
-	}
-	model, pickerErr := runModelPicker(models, os.Stdin, os.Stdout, width, height)
-	restoreErr := term.Restore(stdinFD, state)
-	if restoreErr != nil {
-		return "", fmt.Errorf("failed to restore terminal: %w", restoreErr)
-	}
-	if pickerErr != nil {
-		return "", fmt.Errorf("model search failed: %w", pickerErr)
-	}
-	fmt.Fprintln(os.Stdout)
-	return model, nil
 }
 
 // handleSetAPIKey processes the set-key command.
@@ -579,23 +541,10 @@ func (c *CLI) handleListModels() error {
 		return printModels(os.Stdout, resp.Models)
 	}
 
-	state, err := term.MakeRaw(stdinFD)
-	if err != nil {
-		return fmt.Errorf("failed to start interactive model search: %w", err)
-	}
-	width, height, err := term.GetSize(stdoutFD)
-	if err != nil {
-		width, height = 80, 24
-	}
-	selectedModel, pickerErr := runModelPicker(resp.Models, os.Stdin, os.Stdout, width, height)
-	restoreErr := term.Restore(stdinFD, state)
-	if restoreErr != nil {
-		return fmt.Errorf("failed to restore terminal: %w", restoreErr)
-	}
+	selectedModel, pickerErr := pickModel(resp.Models)
 	if pickerErr != nil {
 		return fmt.Errorf("model search failed: %w", pickerErr)
 	}
-	fmt.Fprintln(os.Stdout)
 	if selectedModel == "" {
 		fmt.Println("Model selection cancelled")
 		return nil
