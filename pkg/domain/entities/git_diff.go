@@ -10,18 +10,18 @@ import (
 // GitDiff represents the changes in a git repository.
 // This entity encapsulates the git diff information and related business rules.
 type GitDiff struct {
-	Content     string   // The raw diff content
-	Files       []string // List of files that were changed
-	Additions   int      // Number of lines added
-	Deletions   int      // Number of lines deleted
-	IsEmpty     bool     // Whether there are any changes
+	Content   string   // The raw diff content
+	Files     []string // List of files that were changed
+	Additions int      // Number of lines added
+	Deletions int      // Number of lines deleted
+	IsEmpty   bool     // Whether there are any changes
 }
 
 // NewGitDiff creates a new GitDiff entity from raw diff content.
 // It parses the diff and extracts relevant information.
 func NewGitDiff(content string) (*GitDiff, error) {
 	content = strings.TrimSpace(content)
-	
+
 	if content == "" {
 		return &GitDiff{
 			Content: "",
@@ -45,7 +45,14 @@ func NewGitDiff(content string) (*GitDiff, error) {
 // parseFiles extracts the list of changed files from the diff content.
 func (g *GitDiff) parseFiles() {
 	lines := strings.Split(g.Content, "\n")
-	files := make(map[string]bool) // Use map to avoid duplicates
+	seen := make(map[string]bool)
+	files := make([]string, 0)
+	addFile := func(file string) {
+		if file != "" && !seen[file] {
+			seen[file] = true
+			files = append(files, file)
+		}
+	}
 
 	for _, line := range lines {
 		// Look for diff --git lines or +++ lines to identify files
@@ -60,7 +67,7 @@ func (g *GitDiff) parseFiles() {
 				fileParts := strings.SplitN(parts[1], " b/", 2)
 				if len(fileParts) == 2 {
 					// fileParts[1] now contains the full path
-					files[fileParts[1]] = true
+					addFile(fileParts[1])
 				}
 			}
 		} else if strings.HasPrefix(line, "+++") && !strings.Contains(line, "/dev/null") {
@@ -68,15 +75,12 @@ func (g *GitDiff) parseFiles() {
 			// Handle the case where the path might contain spaces
 			parts := strings.SplitN(line, "+++ b/", 2)
 			if len(parts) == 2 && parts[1] != "" {
-				files[parts[1]] = true
+				addFile(parts[1])
 			}
 		}
 	}
 
-	// Convert map keys to slice
-	for file := range files {
-		g.Files = append(g.Files, file)
-	}
+	g.Files = files
 }
 
 // parseStats calculates the number of additions and deletions.
@@ -114,7 +118,7 @@ func (g *GitDiff) GetChangesSummary() string {
 		fileText = "files"
 	}
 
-	return fmt.Sprintf("%d %s changed, %d additions, %d deletions", 
+	return fmt.Sprintf("%d %s changed, %d additions, %d deletions",
 		fileCount, fileText, g.Additions, g.Deletions)
 }
 
