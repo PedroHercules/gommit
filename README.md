@@ -32,10 +32,13 @@ The `404 OIDC token exchange error - package not found` message means npm did no
 ## Configuration
 
 ```bash
-# Configure your OpenRouter API key
-gmit config set-key sk-or-v1-your-key-here
+# Start the interactive provider setup
+gmit config
 
-# (Optional) List models, then set any model ID from OpenRouter
+# Or configure a provider from the command line
+gmit config set-key <api-key>
+
+# List models for the active provider, then choose a model
 gmit config list-models
 gmit config set-model <model-id>
 
@@ -45,19 +48,25 @@ gmit config summary
 
 ## 💰 API Costs and Usage
 
-**Important**: Model requests are billed by OpenRouter according to the selected model and its current pricing. Gommit does not control provider pricing, charge your account, or limit your usage. You are responsible for all charges and should check pricing before using a model.
+**Important**: Requests are billed by the selected provider according to the model's current pricing. Gommit does not control provider pricing, charge your account, or limit your usage. You are responsible for all charges and should check pricing before using a model.
 
-- **Recommended**: Choose free models when configuring Gommit; these are commonly marked with `:free` and are labeled in `gmit config list-models` when OpenRouter reports zero pricing.
-- **Cost Monitoring**: Check your usage at [OpenRouter Dashboard](https://openrouter.ai/activity)
+- **Recommended**: Choose free models when available. OpenRouter labels models with `:free`; xAI model pricing is available in the [xAI Console](https://console.x.ai/).
+- **Cost Monitoring**: Check usage with the provider you selected, such as the [OpenRouter Dashboard](https://openrouter.ai/activity) or [xAI Console](https://console.x.ai/).
 - **Rate Limits**: Free models have usage limits - monitor to avoid interruptions
-- **Paid Models**: Costs vary by model and can change. Review OpenRouter's current pricing before using a paid model.
+- **Paid Models**: Costs vary by model and can change. Review the provider's current pricing before using a paid model.
 - **Usage Tips**:
   - Use `--dry-run` to preview without committing
   - Prefer free models for regular use
   - Monitor your monthly usage
-  - Set up billing alerts in OpenRouter
+  - Set up billing alerts with your provider
 
-> ⚠️ **Disclaimer**: Gommit does not control or cap OpenRouter costs. Users are responsible for checking prices, monitoring usage, and setting any available limits in their OpenRouter account.
+> ⚠️ **Disclaimer**: Gommit does not control or cap provider costs. Users are responsible for checking prices, monitoring usage, and setting any available limits in their provider account.
+
+### Providers
+
+The interactive `gmit config` setup offers OpenRouter and Grok. OpenRouter uses an API key. Grok supports an xAI API key or OAuth through xAI's official Grok CLI. For OAuth, Gommit checks whether `grok` is installed and authenticated. If it is missing, Gommit shows the official xAI documentation and the npm package/command, then asks before installing it globally. You can install it yourself using the current [official Grok CLI instructions](https://docs.x.ai/build/enterprise), then run `grok login`.
+
+Grok API-key mode calls xAI directly. Grok OAuth mode delegates requests to the official Grok CLI and therefore requires that CLI to remain installed and logged in. API keys are stored in the operating system keyring; OAuth credentials remain managed by the Grok CLI.
 
 ## Usage
 
@@ -151,7 +160,7 @@ gmit config help
 
 ## Supported AI Models
 
-Gmit fetches the current model catalog from OpenRouter. Use `gmit config list-models` to see available model IDs and published pricing, then choose any listed ID:
+Gmit fetches the current model catalog from the active provider. Use `gmit config list-models` to see available model IDs and pricing when supplied by the provider, then choose a listed ID:
 
 ```bash
 gmit config set-model <model-id>
@@ -159,7 +168,7 @@ gmit config set-model <model-id>
 
 In an interactive terminal, `gmit config list-models` opens a searchable list. Type to filter by model ID, name, or provider, use the arrow keys to move through results, then press Enter to save the selection as the default model. Without an interactive terminal, the command prints the full catalog.
 
-Prefer free models. OpenRouter controls pricing and billing, and Gommit cannot limit charges. The catalog's prices may change; check OpenRouter before selecting a paid model.
+Prefer free models where available. Providers control pricing and billing, and Gommit cannot limit charges. Catalog prices may change; check with the provider before selecting a paid model.
 
 ## Examples
 
@@ -205,7 +214,7 @@ MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 
-- [OpenRouter](https://openrouter.ai/) for the AI API
+- [OpenRouter](https://openrouter.ai/) and [xAI](https://x.ai/) for AI APIs
 - [Conventional Commits](https://www.conventionalcommits.org/) for the message format standard
 - [99designs/keyring](https://github.com/99designs/keyring) for secure storage
 - [joho/godotenv](https://github.com/joho/godotenv) for environment management

@@ -7,11 +7,13 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
 	config_services "github.com/PedroHercules/gommit/pkg/application/services/config"
 	pr_services "github.com/PedroHercules/gommit/pkg/application/services/pull-request"
+	"github.com/PedroHercules/gommit/pkg/domain/repositories"
 	"golang.org/x/term"
 )
 
@@ -214,7 +216,10 @@ func (c *CLI) handlePr(args []string) error {
 // handleConfig processes configuration-related commands.
 func (c *CLI) handleConfig(args []string) error {
 	if len(args) == 0 {
-		return c.showConfigHelp()
+		if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+			return fmt.Errorf("interactive setup requires a terminal; use `gmit config help` for configuration commands")
+		}
+		return c.handleProviderSetup()
 	}
 
 	subcommand := args[0]
@@ -240,6 +245,197 @@ func (c *CLI) handleConfig(args []string) error {
 	default:
 		return c.showConfigHelp()
 	}
+}
+
+func (c *CLI) handleProviderSetup() error {
+	providerChoice, err := promptChoice("Choose a provider", []string{"OpenRouter", "Grok"})
+	if err != nil {
+		return err
+	}
+	provider := "openrouter"
+	authMethod := "api_key"
+	apiKey := ""
+
+	if providerChoice == "OpenRouter" {
+		fmt.Println("OpenRouter controls model pricing and billing. Gommit cannot cap charges; free models are recommended.")
+		apiKey, err = promptAPIKey("OpenRouter API key")
+		if err != nil {
+			return err
+		}
+	} else {
+		provider = "grok"
+		authChoice, choiceErr := promptChoice("Connect to Grok using", []string{"OAuth login", "xAI API key"})
+		if choiceErr != nil {
+			return choiceErr
+		}
+		if authChoice == "OAuth login" {
+			if err := ensureGrokCLI(); err != nil {
+				return err
+			}
+			if err := runGrokLogin(); err != nil {
+				return err
+			}
+			authMethod = "oauth"
+		} else {
+			fmt.Println("xAI API usage may incur charges based on the selected model; Gommit cannot cap them.")
+			apiKey, err = promptAPIKey("xAI API key")
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	modelsResponse, err := c.configService.GetAvailableModelsFor(provider, authMethod, apiKey)
+	if err != nil {
+		return fmt.Errorf("failed to list %s models: %w", provider, err)
+	}
+	if modelsResponse.ErrorMessage != "" {
+		return fmt.Errorf("failed to list %s models: %s", provider, modelsResponse.ErrorMessage)
+	}
+	model, err := pickModel(modelsResponse.Models)
+	if err != nil {
+		return err
+	}
+	if model == "" {
+		fmt.Println("Setup cancelled")
+		return nil
+	}
+	if err := c.configService.ConfigureProvider(provider, authMethod, apiKey); err != nil {
+		return fmt.Errorf("failed to configure %s: %w", provider, err)
+	}
+	modelResponse, err := c.configService.SetProviderDefaultModel(provider, model)
+	if err != nil {
+		return fmt.Errorf("failed to save model: %w", err)
+	}
+	if !modelResponse.Success {
+		return fmt.Errorf("failed to save model: %s", modelResponse.ErrorMessage)
+	}
+	fmt.Printf("Configured %s with model %s\n", providerChoice, model)
+	return nil
+}
+
+func promptChoice(title string, options []string) (string, error) {
+	fmt.Printf("%s:\n", title)
+	for i, option := range options {
+		fmt.Printf("  %d) %s\n", i+1, option)
+	}
+	fmt.Print("Select an option: ")
+	answer, err := readTerminalLine()
+	if err != nil {
+		return "", err
+	}
+	answer = strings.TrimSpace(answer)
+	for i, option := range options {
+		if answer == fmt.Sprint(i+1) || strings.EqualFold(answer, option) {
+			return option, nil
+		}
+	}
+	return "", fmt.Errorf("invalid selection %q", answer)
+}
+
+func promptAPIKey(label string) (string, error) {
+	fmt.Printf("%s: ", label)
+	key, err := term.ReadPassword(int(os.Stdin.Fd()))
+	fmt.Println()
+	if err != nil {
+		return "", fmt.Errorf("could not read API key: %w", err)
+	}
+	if strings.TrimSpace(string(key)) == "" {
+		return "", fmt.Errorf("API key cannot be empty")
+	}
+	return strings.TrimSpace(string(key)), nil
+}
+
+func readTerminalLine() (string, error) {
+	var line strings.Builder
+	var char [1]byte
+	for {
+		n, err := os.Stdin.Read(char[:])
+		if err != nil {
+			return "", err
+		}
+		if n == 0 {
+			continue
+		}
+		if char[0] == '\n' || char[0] == '\r' {
+			return line.String(), nil
+		}
+		line.WriteByte(char[0])
+	}
+}
+
+func ensureGrokCLI() error {
+	if _, err := exec.LookPath("grok"); err == nil {
+		return nil
+	}
+	const docsURL = "https://docs.x.ai/build/enterprise"
+	const installPackage = "@xai-official/grok"
+	fmt.Println("OAuth requires the official Grok CLI.")
+	fmt.Printf("Check the current install instructions at %s\n", docsURL)
+	fmt.Printf("The documented npm package is %s. After checking the docs, Gommit can run: npm install --global %s\n", installPackage, installPackage)
+	confirmed, err := promptYesNo("Did you check the official docs and want Gommit to install this package globally? (y/N): ")
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return fmt.Errorf("install the official Grok CLI using the current instructions at %s, then run `gmit config` again", docsURL)
+	}
+	if _, err := exec.LookPath("npm"); err != nil {
+		return fmt.Errorf("npm was not found; install the official Grok CLI manually using %s", docsURL)
+	}
+	cmd := exec.Command("npm", "install", "--global", installPackage)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("Grok CLI installation failed; check %s and retry: %w", docsURL, err)
+	}
+	if _, err := exec.LookPath("grok"); err != nil {
+		return fmt.Errorf("installation completed but `grok` was not found on PATH; check %s", docsURL)
+	}
+	return nil
+}
+
+func runGrokLogin() error {
+	cmd := exec.Command("grok", "login")
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("Grok login failed: %w", err)
+	}
+	return nil
+}
+
+func promptYesNo(prompt string) (bool, error) {
+	fmt.Print(prompt)
+	answer, err := readTerminalLine()
+	if err != nil {
+		return false, err
+	}
+	return strings.EqualFold(strings.TrimSpace(answer), "y") || strings.EqualFold(strings.TrimSpace(answer), "yes"), nil
+}
+
+func pickModel(models []repositories.LLMModel) (string, error) {
+	stdinFD := int(os.Stdin.Fd())
+	stdoutFD := int(os.Stdout.Fd())
+	if !term.IsTerminal(stdinFD) || !term.IsTerminal(stdoutFD) {
+		return "", fmt.Errorf("model selection requires an interactive terminal")
+	}
+	state, err := term.MakeRaw(stdinFD)
+	if err != nil {
+		return "", fmt.Errorf("failed to start model search: %w", err)
+	}
+	width, height, err := term.GetSize(stdoutFD)
+	if err != nil {
+		width, height = 80, 24
+	}
+	model, pickerErr := runModelPicker(models, os.Stdin, os.Stdout, width, height)
+	restoreErr := term.Restore(stdinFD, state)
+	if restoreErr != nil {
+		return "", fmt.Errorf("failed to restore terminal: %w", restoreErr)
+	}
+	if pickerErr != nil {
+		return "", fmt.Errorf("model search failed: %w", pickerErr)
+	}
+	fmt.Fprintln(os.Stdout)
+	return model, nil
 }
 
 // handleSetAPIKey processes the set-key command.
@@ -325,7 +521,7 @@ func (c *CLI) handleSetModel(args []string) error {
 	}
 
 	fmt.Printf("Success: %s\n", resp.Message)
-	fmt.Println("Cost notice: OpenRouter controls model pricing and billing; Gommit cannot limit your charges. Prefer a free model (often marked :free).")
+	fmt.Println("Cost notice: the provider controls model pricing and billing; Gommit cannot limit charges. Check pricing before using paid models.")
 	return nil
 }
 
@@ -419,12 +615,15 @@ func (c *CLI) handleConfigSummary() error {
 	}
 
 	fmt.Println("\nConfiguration Summary:")
+	fmt.Printf("Provider: %s (%s)\n", resp.Provider, resp.AuthMethod)
 
-	// API Key status
-	if resp.APIKeyConfigured {
+	// Authentication status
+	if resp.AuthMethod == "oauth" && resp.APIKeyConfigured {
+		fmt.Printf("Authentication: %s\n", resp.APIKeyMasked)
+	} else if resp.APIKeyConfigured {
 		fmt.Printf("API Key: %s\n", resp.APIKeyMasked)
 	} else {
-		fmt.Println("API Key: Not configured")
+		fmt.Println("Authentication: Not configured")
 	}
 
 	// Default model status

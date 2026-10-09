@@ -176,10 +176,10 @@ func renderModelPicker(output io.Writer, models []repositories.LLMModel, query s
 		end = len(models)
 	}
 
-	if _, err := fmt.Fprint(output, "\x1b[2J\x1b[HOpenRouter models\r\n"); err != nil {
+	if _, err := fmt.Fprint(output, "\x1b[2J\x1b[HAvailable models\r\n"); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprint(output, "OpenRouter controls pricing and billing; Gommit cannot limit charges. Prefer free models.\r\n"); err != nil {
+	if _, err := fmt.Fprint(output, "The provider controls pricing and billing; Gommit cannot limit charges. Prefer free models.\r\n"); err != nil {
 		return err
 	}
 	if _, err := fmt.Fprintf(output, "Search: %s\r\n", query); err != nil {
@@ -232,7 +232,7 @@ func printModels(output io.Writer, models []repositories.LLMModel) error {
 	if _, err := fmt.Fprintf(output, "\nAvailable Models (%d):\n\n", len(models)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(output, "OpenRouter model pricing can incur charges. Gommit does not control or limit costs; prefer free models."); err != nil {
+	if _, err := fmt.Fprintln(output, "Model pricing can incur charges. The provider controls billing; Gommit does not control or limit costs. Prefer free models."); err != nil {
 		return err
 	}
 	for _, model := range models {

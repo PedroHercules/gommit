@@ -40,6 +40,17 @@ type ConfigRepository interface {
 	// DeleteDefaultModel removes the default model preference.
 	DeleteDefaultModel() error
 
+	SaveActiveProvider(provider string) error
+	LoadActiveProvider() (string, error)
+	SaveProviderAuthMethod(provider, method string) error
+	LoadProviderAuthMethod(provider string) (string, error)
+	SaveProviderAPIKey(provider, apiKey string) error
+	LoadProviderAPIKey(provider string) (string, error)
+	DeleteProviderAPIKey(provider string) error
+	SaveProviderDefaultModel(provider, model string) error
+	LoadProviderDefaultModel(provider string) (string, error)
+	DeleteProviderDefaultModel(provider string) error
+
 	// Exists checks if a configuration file exists.
 	Exists() bool
 }

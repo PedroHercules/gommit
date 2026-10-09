@@ -3,8 +3,8 @@ package config_services
 import "github.com/PedroHercules/gommit/pkg/domain/usecases"
 
 type ServiceContainer struct {
-	apiKeyService    *apiKeyService
-	modelService     *modelService
+	apiKeyService     *apiKeyService
+	modelService      *modelService
 	validationService *validationService
 }
 
@@ -14,8 +14,8 @@ type ConfigService struct {
 
 func NewConfigService(configUC *usecases.ConfigUseCase) *ConfigService {
 	container := &ServiceContainer{
-		apiKeyService:    newAPIKeyService(configUC),
-		modelService:     newModelService(configUC),
+		apiKeyService:     newAPIKeyService(configUC),
+		modelService:      newModelService(configUC),
 		validationService: newValidationService(configUC),
 	}
 
@@ -50,6 +50,30 @@ func (c *ConfigService) RemoveDefaultModel() error {
 
 func (c *ConfigService) GetAvailableModels() (*GetAvailableModelsResponse, error) {
 	return c.services.modelService.GetAvailableModels()
+}
+
+func (c *ConfigService) GetAvailableModelsFor(provider, authMethod, apiKey string) (*GetAvailableModelsResponse, error) {
+	response, err := c.services.apiKeyService.configUC.GetAvailableModelsFor(provider, authMethod, apiKey)
+	if err != nil {
+		return nil, err
+	}
+	return &GetAvailableModelsResponse{Models: response.Models, ErrorMessage: response.ErrorMessage}, nil
+}
+
+func (c *ConfigService) ConfigureProvider(provider, authMethod, apiKey string) error {
+	return c.services.apiKeyService.configUC.ConfigureProvider(provider, authMethod, apiKey)
+}
+
+func (c *ConfigService) SetActiveProvider(provider string) error {
+	return c.services.apiKeyService.configUC.SetActiveProvider(provider)
+}
+
+func (c *ConfigService) SetProviderDefaultModel(provider, model string) (*SetupModelResponse, error) {
+	ucResponse, err := c.services.apiKeyService.configUC.SetProviderDefaultModel(provider, model)
+	if err != nil {
+		return nil, err
+	}
+	return &SetupModelResponse{Success: ucResponse.Success, Message: ucResponse.Message, ErrorMessage: ucResponse.ErrorMessage}, nil
 }
 
 func (c *ConfigService) GetConfigSummary() (*ConfigSummaryResponse, error) {

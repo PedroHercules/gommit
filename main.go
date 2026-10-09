@@ -27,7 +27,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	llmRepo := llm.NewOpenRouterRepository("")
+	llmRepo := llm.NewProviderRouter(
+		llm.NewOpenRouterRepository(""),
+		llm.NewGrokAPIRepository(""),
+		llm.NewGrokCLIRepository(),
+	)
 
 	configUseCase := usecases.NewConfigUseCase(configRepo, llmRepo)
 	generateCommitUseCase := usecases.NewGenerateCommitUseCase(gitRepo, llmRepo, configRepo)

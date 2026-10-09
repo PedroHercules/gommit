@@ -9,20 +9,27 @@ import (
 // Config represents the application configuration.
 // This entity encapsulates all configuration-related business rules.
 type Config struct {
-	APIKey       string // The OpenRouter API key for LLM access
-	DefaultModel string // The preferred LLM model to use
+	Provider     string // Active provider: openrouter or grok
+	AuthMethod   string // api_key or oauth (Grok only)
+	APIKey       string // API key for the active provider
+	DefaultModel string // Preferred model for the active provider
 }
 
 // NewConfig creates a new configuration entity with validation.
 // It ensures the configuration follows business rules.
 func NewConfig(apiKey, defaultModel string) (*Config, error) {
+	return NewProviderConfig("openrouter", "api_key", apiKey, defaultModel)
+}
+
+func NewProviderConfig(provider, authMethod, apiKey, defaultModel string) (*Config, error) {
 	config := &Config{
+		Provider:     strings.TrimSpace(provider),
+		AuthMethod:   strings.TrimSpace(authMethod),
 		APIKey:       strings.TrimSpace(apiKey),
 		DefaultModel: strings.TrimSpace(defaultModel),
 	}
 
-	// Validate API key format if provided
-	if config.APIKey != "" && !config.IsValidAPIKey() {
+	if config.Provider == "openrouter" && config.APIKey != "" && !config.IsValidAPIKey() {
 		return nil, errors.New("invalid API key format")
 	}
 
@@ -36,7 +43,9 @@ func (c *Config) IsValidAPIKey() bool {
 		return false
 	}
 
-	// OpenRouter API keys typically start with "sk-or-v1-"
+	if c.Provider == "grok" {
+		return strings.HasPrefix(c.APIKey, "xai-") && len(c.APIKey) > 20
+	}
 	return strings.HasPrefix(c.APIKey, "sk-or-v1-") && len(c.APIKey) > 20
 }
 
@@ -53,7 +62,7 @@ func (c *Config) HasDefaultModel() bool {
 // SetAPIKey updates the API key with validation.
 func (c *Config) SetAPIKey(apiKey string) error {
 	apiKey = strings.TrimSpace(apiKey)
-	if apiKey != "" && !strings.HasPrefix(apiKey, "sk-or-v1-") {
+	if apiKey != "" && c.Provider == "openrouter" && !strings.HasPrefix(apiKey, "sk-or-v1-") {
 		return errors.New("invalid API key format")
 	}
 	c.APIKey = apiKey

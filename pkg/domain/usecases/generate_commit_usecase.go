@@ -92,9 +92,8 @@ func (uc *GenerateCommitUseCase) Execute(req GenerateCommitRequest) (*GenerateCo
 		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Step 6: Validate API key
-	if !config.HasAPIKey() {
-		return nil, errors.New("API key not configured. Run 'gommit config set-key <your-api-key>'")
+	if err := configureLLMForConfig(uc.llmRepo, config); err != nil {
+		return nil, err
 	}
 
 	// Step 7: Determine which model to use
@@ -102,9 +101,6 @@ func (uc *GenerateCommitUseCase) Execute(req GenerateCommitRequest) (*GenerateCo
 	if modelToUse == "" {
 		modelToUse = config.DefaultModel
 	}
-
-	// Step 8: Set API key for LLM repository
-	uc.llmRepo.SetAPIKey(config.APIKey)
 
 	// Step 9: Generate commit message using LLM
 	llmResponse, err := uc.llmRepo.GenerateCommitMessage(diff, modelToUse)

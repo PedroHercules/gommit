@@ -3,6 +3,7 @@ package usecases
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/PedroHercules/gommit/pkg/domain/entities"
 	"github.com/PedroHercules/gommit/pkg/domain/repositories"
@@ -40,17 +41,27 @@ type SetAPIKeyResponse struct {
 
 // SetAPIKey stores the API key securely and validates it.
 func (uc *ConfigUseCase) SetAPIKey(req SetAPIKeyRequest) (*SetAPIKeyResponse, error) {
-	response := &SetAPIKeyResponse{}
+	provider, err := uc.configRepo.LoadActiveProvider()
+	if err != nil || provider == "" {
+		provider = "openrouter"
+	}
+	return uc.SetProviderAPIKey(provider, req.APIKey)
+}
 
-	// Step 1: Validate the API key format
-	_, err := entities.NewConfig(req.APIKey, "")
-	if err != nil {
+func (uc *ConfigUseCase) SetProviderAPIKey(provider, apiKey string) (*SetAPIKeyResponse, error) {
+	response := &SetAPIKeyResponse{}
+	apiKey = strings.TrimSpace(apiKey)
+	if err := validateProviderAPIKey(provider, apiKey); err != nil {
+		response.ErrorMessage = err.Error()
+		return response, nil
+	}
+	if err := uc.configureLLM(provider, "api_key"); err != nil {
 		response.ErrorMessage = err.Error()
 		return response, nil
 	}
 
-	// Step 2: Test the API key with the LLM service
-	isValid, err := uc.llmRepo.TestConnection(req.APIKey)
+	// Validate the key against the selected provider before storing it.
+	isValid, err := uc.llmRepo.TestConnection(apiKey)
 	if err != nil {
 		response.ErrorMessage = fmt.Sprintf("Failed to validate API key: %v", err)
 		return response, nil
@@ -62,9 +73,13 @@ func (uc *ConfigUseCase) SetAPIKey(req SetAPIKeyRequest) (*SetAPIKeyResponse, er
 	}
 
 	// Step 3: Save the API key
-	err = uc.configRepo.SaveAPIKey(req.APIKey)
+	err = uc.configRepo.SaveProviderAPIKey(provider, apiKey)
 	if err != nil {
 		response.ErrorMessage = fmt.Sprintf("Failed to save API key: %v", err)
+		return response, nil
+	}
+	if err := uc.configRepo.SaveProviderAuthMethod(provider, "api_key"); err != nil {
+		response.ErrorMessage = fmt.Sprintf("Failed to save authentication method: %v", err)
 		return response, nil
 	}
 
@@ -84,11 +99,19 @@ type GetAPIKeyResponse struct {
 // GetAPIKey retrieves the current API key.
 func (uc *ConfigUseCase) GetAPIKey() (*GetAPIKeyResponse, error) {
 	response := &GetAPIKeyResponse{}
-
-	apiKey, err := uc.configRepo.LoadAPIKey()
+	provider, err := uc.configRepo.LoadActiveProvider()
 	if err != nil {
-		response.ErrorMessage = fmt.Sprintf("Failed to load API key: %v", err)
+		provider = "openrouter"
+	}
+	authMethod, _ := uc.configRepo.LoadProviderAuthMethod(provider)
+	if provider == "grok" && authMethod == "oauth" {
+		response.Configured = true
+		response.MaskedAPIKey = "Authenticated through Grok CLI"
 		return response, nil
+	}
+	apiKey, err := uc.configRepo.LoadProviderAPIKey(provider)
+	if err != nil {
+		apiKey = ""
 	}
 
 	if apiKey == "" {
@@ -97,7 +120,7 @@ func (uc *ConfigUseCase) GetAPIKey() (*GetAPIKeyResponse, error) {
 		return response, nil
 	}
 
-	config, _ := entities.NewConfig(apiKey, "")
+	config, _ := entities.NewProviderConfig(provider, authMethod, apiKey, "")
 	response.APIKey = apiKey
 	response.MaskedAPIKey = config.GetMaskedAPIKey()
 	response.Configured = true
@@ -107,7 +130,117 @@ func (uc *ConfigUseCase) GetAPIKey() (*GetAPIKeyResponse, error) {
 
 // RemoveAPIKey deletes the stored API key.
 func (uc *ConfigUseCase) RemoveAPIKey() error {
-	return uc.configRepo.DeleteAPIKey()
+	provider, err := uc.configRepo.LoadActiveProvider()
+	if err != nil {
+		provider = "openrouter"
+	}
+	return uc.configRepo.DeleteProviderAPIKey(provider)
+}
+
+func (uc *ConfigUseCase) SetActiveProvider(provider string) error {
+	if provider != "openrouter" && provider != "grok" {
+		return fmt.Errorf("unsupported provider %q", provider)
+	}
+	authMethod, err := uc.configRepo.LoadProviderAuthMethod(provider)
+	if err != nil {
+		authMethod = "api_key"
+	}
+	if err := uc.configureLLM(provider, authMethod); err != nil {
+		return err
+	}
+	return uc.configRepo.SaveActiveProvider(provider)
+}
+
+func (uc *ConfigUseCase) GetProviderInfo() (string, string, error) {
+	provider, err := uc.configRepo.LoadActiveProvider()
+	if err != nil || provider == "" {
+		provider = "openrouter"
+	}
+	authMethod, err := uc.configRepo.LoadProviderAuthMethod(provider)
+	if err != nil || authMethod == "" {
+		authMethod = "api_key"
+	}
+	return provider, authMethod, nil
+}
+
+func (uc *ConfigUseCase) ConfigureProvider(provider, authMethod, apiKey string) error {
+	if err := uc.configureLLM(provider, authMethod); err != nil {
+		return err
+	}
+	if authMethod == "api_key" {
+		apiKey = strings.TrimSpace(apiKey)
+		if err := validateProviderAPIKey(provider, apiKey); err != nil {
+			return err
+		}
+		valid, err := uc.llmRepo.TestConnection(apiKey)
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return fmt.Errorf("invalid API key or %s is unavailable", provider)
+		}
+		if err := uc.configRepo.SaveProviderAPIKey(provider, strings.TrimSpace(apiKey)); err != nil {
+			return err
+		}
+	}
+	if authMethod == "oauth" {
+		valid, err := uc.llmRepo.TestConnection("")
+		if err != nil {
+			return err
+		}
+		if !valid {
+			return fmt.Errorf("Grok OAuth session is not available; run `grok login` and try again")
+		}
+	}
+	if err := uc.configRepo.SaveProviderAuthMethod(provider, authMethod); err != nil {
+		return err
+	}
+	return uc.configRepo.SaveActiveProvider(provider)
+}
+
+func validateProviderAPIKey(provider, apiKey string) error {
+	if apiKey == "" {
+		return fmt.Errorf("API key cannot be empty")
+	}
+	switch provider {
+	case "openrouter":
+		if _, err := entities.NewConfig(apiKey, ""); err != nil {
+			return err
+		}
+	case "grok":
+		if !strings.HasPrefix(apiKey, "xai-") || len(apiKey) <= 20 {
+			return fmt.Errorf("xAI API keys should start with xai- and be complete")
+		}
+	default:
+		return fmt.Errorf("unsupported provider %q", provider)
+	}
+	return nil
+}
+
+func (uc *ConfigUseCase) GetAvailableModelsFor(provider, authMethod, apiKey string) (*GetAvailableModelsResponse, error) {
+	response := &GetAvailableModelsResponse{}
+	if err := uc.configureLLM(provider, authMethod); err != nil {
+		response.ErrorMessage = err.Error()
+		return response, nil
+	}
+	uc.llmRepo.SetAPIKey(apiKey)
+	models, err := uc.llmRepo.GetAvailableModels()
+	if err != nil {
+		response.ErrorMessage = err.Error()
+		return response, nil
+	}
+	response.Models = models
+	return response, nil
+}
+
+func (uc *ConfigUseCase) configureLLM(provider, authMethod string) error {
+	if configurable, ok := uc.llmRepo.(repositories.ProviderConfigurableLLMRepository); ok {
+		return configurable.ConfigureProvider(provider, authMethod)
+	}
+	if provider != "openrouter" || authMethod != "api_key" {
+		return fmt.Errorf("configured LLM repository does not support %s/%s", provider, authMethod)
+	}
+	return nil
 }
 
 // SetDefaultModelRequest represents the input for setting a default model.
@@ -124,29 +257,47 @@ type SetDefaultModelResponse struct {
 
 // SetDefaultModel sets the default LLM model to use.
 func (uc *ConfigUseCase) SetDefaultModel(req SetDefaultModelRequest) (*SetDefaultModelResponse, error) {
+	provider, err := uc.configRepo.LoadActiveProvider()
+	if err != nil {
+		provider = "openrouter"
+	}
+	return uc.SetProviderDefaultModel(provider, req.Model)
+}
+
+func (uc *ConfigUseCase) SetProviderDefaultModel(provider, model string) (*SetDefaultModelResponse, error) {
 	response := &SetDefaultModelResponse{}
+	authMethod, err := uc.configRepo.LoadProviderAuthMethod(provider)
+	if err != nil {
+		authMethod = "api_key"
+	}
+	apiKey, _ := uc.configRepo.LoadProviderAPIKey(provider)
+	if err := uc.configureLLM(provider, authMethod); err != nil {
+		response.ErrorMessage = err.Error()
+		return response, nil
+	}
+	uc.llmRepo.SetAPIKey(apiKey)
 
 	// Step 1: Validate the model exists
-	isValid, err := uc.llmRepo.ValidateModel(req.Model)
+	isValid, err := uc.llmRepo.ValidateModel(model)
 	if err != nil {
 		response.ErrorMessage = fmt.Sprintf("Failed to validate model: %v", err)
 		return response, nil
 	}
 
 	if !isValid {
-		response.ErrorMessage = fmt.Sprintf("Model '%s' is not available", req.Model)
+		response.ErrorMessage = fmt.Sprintf("Model '%s' is not available", model)
 		return response, nil
 	}
 
 	// Step 2: Save the default model
-	err = uc.configRepo.SaveDefaultModel(req.Model)
+	err = uc.configRepo.SaveProviderDefaultModel(provider, model)
 	if err != nil {
 		response.ErrorMessage = fmt.Sprintf("Failed to save default model: %v", err)
 		return response, nil
 	}
 
 	response.Success = true
-	response.Message = fmt.Sprintf("Default model set to '%s'", req.Model)
+	response.Message = fmt.Sprintf("Default model set to '%s'", model)
 	return response, nil
 }
 
@@ -160,8 +311,11 @@ type GetDefaultModelResponse struct {
 // GetDefaultModel retrieves the current default model.
 func (uc *ConfigUseCase) GetDefaultModel() (*GetDefaultModelResponse, error) {
 	response := &GetDefaultModelResponse{}
-
-	model, err := uc.configRepo.LoadDefaultModel()
+	provider, err := uc.configRepo.LoadActiveProvider()
+	if err != nil {
+		provider = "openrouter"
+	}
+	model, err := uc.configRepo.LoadProviderDefaultModel(provider)
 	if err != nil {
 		response.ErrorMessage = fmt.Sprintf("Failed to load default model: %v", err)
 		return response, nil
@@ -179,7 +333,11 @@ func (uc *ConfigUseCase) GetDefaultModel() (*GetDefaultModelResponse, error) {
 
 // RemoveDefaultModel removes the default model configuration.
 func (uc *ConfigUseCase) RemoveDefaultModel() error {
-	return uc.configRepo.DeleteDefaultModel()
+	provider, err := uc.configRepo.LoadActiveProvider()
+	if err != nil {
+		provider = "openrouter"
+	}
+	return uc.configRepo.DeleteProviderDefaultModel(provider)
 }
 
 // GetAvailableModelsResponse represents the output of getting available models.
@@ -191,7 +349,16 @@ type GetAvailableModelsResponse struct {
 // GetAvailableModels retrieves all available LLM models.
 func (uc *ConfigUseCase) GetAvailableModels() (*GetAvailableModelsResponse, error) {
 	response := &GetAvailableModelsResponse{}
-
+	config, err := uc.configRepo.Load()
+	if err != nil {
+		response.ErrorMessage = err.Error()
+		return response, nil
+	}
+	if err := uc.configureLLM(config.Provider, config.AuthMethod); err != nil {
+		response.ErrorMessage = err.Error()
+		return response, nil
+	}
+	uc.llmRepo.SetAPIKey(config.APIKey)
 	models, err := uc.llmRepo.GetAvailableModels()
 	if err != nil {
 		response.ErrorMessage = fmt.Sprintf("Failed to get available models: %v", err)

@@ -6,19 +6,21 @@ import (
 )
 
 type ConfigSummaryResponse struct {
-	APIKeyConfigured    bool
-	APIKeyMasked        string
-	DefaultModelSet     bool
-	DefaultModel        string
+	Provider             string
+	AuthMethod           string
+	APIKeyConfigured     bool
+	APIKeyMasked         string
+	DefaultModelSet      bool
+	DefaultModel         string
 	AvailableModelsCount int
-	ErrorMessage        string
+	ErrorMessage         string
 }
 
 type ValidateConfigurationResponse struct {
-	Valid            bool
-	Issues           []string
-	Recommendations  []string
-	ErrorMessage     string
+	Valid           bool
+	Issues          []string
+	Recommendations []string
+	ErrorMessage    string
 }
 
 type validationService struct {
@@ -33,6 +35,7 @@ func newValidationService(configUC *usecases.ConfigUseCase) *validationService {
 
 func (s *validationService) GetConfigSummary() (*ConfigSummaryResponse, error) {
 	response := &ConfigSummaryResponse{}
+	response.Provider, response.AuthMethod, _ = s.configUC.GetProviderInfo()
 
 	apiKeyResp, err := s.configUC.GetAPIKey()
 	if err != nil {
@@ -72,9 +75,14 @@ func (s *validationService) ValidateConfiguration() (*ValidateConfigurationRespo
 		return response, nil
 	}
 
+	provider, authMethod, _ := s.configUC.GetProviderInfo()
 	if !apiKeyResp.Configured {
 		response.Issues = append(response.Issues, "API key is not configured")
-		response.Recommendations = append(response.Recommendations, "Run 'gommit config set-key <your-api-key>' to configure your OpenRouter API key")
+		if provider == "grok" && authMethod == "oauth" {
+			response.Recommendations = append(response.Recommendations, "Run 'grok login' to authenticate with Grok")
+		} else {
+			response.Recommendations = append(response.Recommendations, "Run 'gmit config' to configure a provider and API key")
+		}
 	}
 
 	modelResp, err := s.configUC.GetDefaultModel()

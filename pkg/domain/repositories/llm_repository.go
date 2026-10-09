@@ -62,3 +62,9 @@ type LLMRepository interface {
 	// GetModelInfo returns detailed information about a specific model.
 	GetModelInfo(modelID string) (*LLMModel, error)
 }
+
+// ProviderConfigurableLLMRepository selects the backend used by the shared LLM interface.
+type ProviderConfigurableLLMRepository interface {
+	LLMRepository
+	ConfigureProvider(provider, authMethod string) error
+}

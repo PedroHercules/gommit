@@ -30,19 +30,20 @@ PR OPTIONS:
     --base-branch <branch> Specify base branch for comparison (default: main)
 
 CONFIG COMMANDS:
-    config set-key <key>      Set OpenRouter API key
+    config                   Open provider setup and model selector
+    config set-key <key>      Set active provider API key
     config get-key           Show current API key (masked)
     config remove-key        Remove API key
     config set-model <model> Set default AI model
     config get-model         Show current default model
     config remove-model      Remove default model
-    config list-models       Search and select an OpenRouter model
+    config list-models       Search and select a model for the active provider
     config summary           Show configuration summary
     config validate          Validate current configuration
 
 EXAMPLES:
     gommit commit                           # Generate message and commit
-    gommit commit --model provider/model-id # Use a model from OpenRouter
+    gommit commit --model provider/model-id # Use a model from the active provider
     gommit pr                               # Generate PR description
     gommit pr --base-branch develop         # Generate PR against develop branch
     gommit config set-key sk-xxx            # Set API key
@@ -51,11 +52,11 @@ EXAMPLES:
     gommit validate "feat: add new feature"  # Validate message
 
 NOTES:
-    • Requires OpenRouter API key for AI features
+    • Supports OpenRouter and Grok (xAI API key or official Grok CLI OAuth)
     • Works with staged Git changes
     • Supports Conventional Commits format
     • Configuration is stored securely
-    • OpenRouter controls model costs and billing; prefer free models
+    • Providers control pricing and billing; Gommit cannot cap charges
 
 For more information, visit: https://github.com/PedroHercules/gommit`)
 
@@ -68,21 +69,24 @@ func (c *CLI) showConfigHelp() error {
 Gommit Configuration Commands
 
 USAGE:
-    gommit config <COMMAND> [OPTIONS]
+    gommit config [COMMAND] [OPTIONS]
+
+Run gmit config without a command to select OpenRouter or Grok, authenticate, and choose a model.
 
 COMMANDS:
-    set-key <key>      Set OpenRouter API key
+    set-key <key>      Set API key for the active provider
     get-key           Show current API key (masked)
     remove-key        Remove stored API key
     set-model <model> Set default AI model
     get-model         Show current default model
     remove-model      Remove default model setting
-    list-models       Search and select an OpenRouter model
+    list-models       Search and select a model for the active provider
     summary           Show complete configuration summary
     validate          Validate current configuration
 
 EXAMPLES:
-    gommit config set-key sk-or-v1-xxx...        # Set API key
+    gmit config                                  # Interactive provider setup
+    gmit config set-key <key>                    # Set active provider API key
     gommit config set-model provider/model-id    # Set default model
     gommit config list-models                    # Search and select a model
     gommit config summary                        # Check all settings
@@ -93,8 +97,8 @@ NOTES:
     • Default model is used when --model is not specified
     • Configuration is validated before use
     • Some commands require valid API key
-    • OpenRouter controls model costs and billing; Gommit cannot limit charges
-    • Prefer free models, often marked with :free
+    • The provider controls pricing and billing; Gommit cannot limit charges
+    • Check current prices before selecting paid models
     • In an interactive terminal, list-models filters while you type; Enter saves the selected model as default
     • Without an interactive terminal, list-models prints the full catalog`)
 
@@ -110,7 +114,7 @@ AI-Powered Git Commit Message Generator
 
 Built with:
     • Go 1.21+
-    • OpenRouter API
+    • OpenRouter and xAI APIs
 
 Author: Pedro Hercules
 License: MIT
