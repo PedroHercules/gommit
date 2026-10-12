@@ -1,233 +1,126 @@
-# Gmit - AI-Powered Git Commit Message & Pull Request Generator
+# Gmit
 
-Gmit is a command-line tool that uses artificial intelligence to automatically generate Git commit messages and Pull Request descriptions, following best practices and the Conventional Commits format. The tool also provides functionality for commit message validation and flexible AI model configuration.
+Gmit is a command-line tool that uses OpenRouter or xAI Grok to draft Git commit messages and pull request descriptions. It can also run a lightweight check on a commit message. You review generated text before committing unless you explicitly pass `--commit`.
 
-## Key Features
+## Requirements
 
-- **Automatic Commit Generation**: AI analyzes your changes and generates messages following Conventional Commits
-- **Pull Request Descriptions**: Creates detailed descriptions for your PRs automatically with smart branch comparison
-- **Message Validation**: Verifies that your messages follow best practices
-- **Flexible Configuration**: Support for multiple AI models and custom configurations
-- **Secure Storage**: API keys stored securely in the system keyring
-- **Intuitive Interface**: Simple and easy-to-use CLI with contextual help
-- **Cross-Platform**: Works on Windows, macOS, and Linux
+- Git installed and available as `git` in your terminal.
+- An OpenRouter account/API key or an xAI account/API key.
+- For Grok OAuth only: the official `grok` CLI. During setup, Gmit checks for it and, if it is missing, offers to install it globally with npm after asking you. You can also follow [xAI's current installation instructions](https://docs.x.ai/build/overview) yourself.
+- A terminal for interactive setup and model selection. Most commands also work non-interactively.
 
-## 🚀 Installation
+Install Gmit globally with npm:
 
-```bash
-npm install -g gmit
-```
-
-## Maintainer releases
-
-Pull requests to `main` run the Go test suite. A push to `main` with Conventional Commit changes automatically calculates the next SemVer version, builds binaries for Linux, macOS, and Windows on amd64 and arm64, updates `package.json`, publishes the package to npm, and creates a GitHub release. `feat` creates a minor release, `fix` and `perf` create patch releases, and `BREAKING CHANGE` creates a major release; documentation and chore commits do not publish a new version.
-
-Before the first automated release, configure npm authentication using one of these options:
-
-- **Trusted Publishing (recommended):** in the `gmit` package settings on npmjs.com, add GitHub Actions with organization/user `PedroHercules`, repository `gommit`, workflow filename `ci-cd.yml`, and no GitHub environment. The workflow grants `id-token: write` and uses OIDC.
-- **Token fallback:** create an npm publishing token and save it as the `NPM_TOKEN` Actions secret in the GitHub repository settings. The workflow passes this secret to semantic-release as a fallback if OIDC authentication is unavailable.
-
-The `404 OIDC token exchange error - package not found` message means npm did not match the OIDC request to a trusted publisher for this package. Check that the publisher is configured on the `gmit` package and that the repository and workflow filename match exactly. On its first run, the workflow verifies that the repository version matches npm's `latest` and initializes the matching Git release tag as a baseline.
-
-## Configuration
-
-```bash
-# Start the interactive provider setup
-gmit config
-
-# Or configure a provider from the command line
-gmit config set-key <api-key>
-
-# List models for the active provider, then choose a model
-gmit config list-models
-gmit config set-model <model-id>
-
-# Check configuration
-gmit config summary
-```
-
-## 💰 API Costs and Usage
-
-**Important**: Requests are billed by the selected provider according to the model's current pricing. Gommit does not control provider pricing, charge your account, or limit your usage. You are responsible for all charges and should check pricing before using a model.
-
-- **Recommended**: Choose free models when available. OpenRouter labels models with `:free`; xAI model pricing is available in the [xAI Console](https://console.x.ai/).
-- **Cost Monitoring**: Check usage with the provider you selected, such as the [OpenRouter Dashboard](https://openrouter.ai/activity) or [xAI Console](https://console.x.ai/).
-- **Rate Limits**: Free models have usage limits - monitor to avoid interruptions
-- **Paid Models**: Costs vary by model and can change. Review the provider's current pricing before using a paid model.
-- **Usage Tips**:
-  - Use `--dry-run` to preview without committing
-  - Prefer free models for regular use
-  - Monitor your monthly usage
-  - Set up billing alerts with your provider
-
-> ⚠️ **Disclaimer**: Gommit does not control or cap provider costs. Users are responsible for checking prices, monitoring usage, and setting any available limits in their provider account.
-
-### Providers
-
-The interactive `gmit config` setup offers OpenRouter and Grok. OpenRouter uses an API key. Grok supports an xAI API key or OAuth through xAI's official Grok CLI. For OAuth, Gommit checks whether `grok` is installed and authenticated. If it is missing, Gommit shows the official xAI documentation and the npm package/command, then asks before installing it globally. You can install it yourself using the current [official Grok CLI instructions](https://docs.x.ai/build/enterprise), then run `grok login`.
-
-Grok API-key mode calls xAI directly. Grok OAuth mode delegates requests to the official Grok CLI and therefore requires that CLI to remain installed and logged in. API keys are stored in the operating system keyring; OAuth credentials remain managed by the Grok CLI.
-
-## Usage
-
-### Commit Generation
-
-```bash
-# Generate and commit automatically
-gmit commit --commit
-
-# Only generate the message (dry run)
-gmit commit --dry-run
-
-# Use a model from the OpenRouter catalog
-gmit commit --model <model-id>
-
-# Interactive mode with confirmation
-gmit commit
-```
-
-### Pull Request Generation
-
-The PR functionality is one of Gmit's most powerful features, providing intelligent analysis of your branch changes:
-
-```bash
-# Generate PR description for current branch
-gmit pr
-
-# Generate PR comparing with specific base branch
-gmit pr --base-branch develop
-
-# Generate PR with custom target branch
-gmit pr --base-branch main
-
-# Use a model from the OpenRouter catalog for PR generation
-gmit pr --model <model-id> --base-branch develop
-```
-
-#### How PR Generation Works
-
-1. **Branch Analysis**: Gmit automatically detects your current branch and compares it with the target branch (default: main)
-2. **Commit History**: Analyzes all commits between your branch and the base branch
-3. **Code Changes**: Reviews the actual code differences (git diff)
-4. **Smart Summarization**: Uses AI to create a comprehensive PR description including:
-   - Clear title following conventional commit format
-   - Detailed description of changes
-   - List of modified files and their purposes
-   - Breaking changes (if any)
-   - Testing recommendations
-
-#### PR Description Format
-
-Generated PR descriptions follow this structure:
-
-```markdown
-## Description
-[AI-generated summary of changes]
-
-## Changes Made
-- [List of key changes]
-- [Feature additions]
-- [Bug fixes]
-
-## Files Modified
-- `file1.go` - [Purpose of changes]
-- `file2.js` - [What was modified]
-
-## Breaking Changes
-[If applicable]
-
-## Testing
-[Suggested testing approach]
-```
-
-### Other Commands
-
-```bash
-# Validate a commit message
-gmit validate "feat: add new feature"
-
-# Show help
+```sh
+npm install --global gmit
 gmit help
-
-# Show version
-gmit version
-
-# Configuration management
-gmit config help
 ```
 
+## Quick start
 
+Run the interactive setup. Select OpenRouter or Grok, configure authentication, then search for and select a model.
 
-## Supported AI Models
-
-Gmit fetches the current model catalog from the active provider. Use `gmit config list-models` to see available model IDs and pricing when supplied by the provider, then choose a listed ID:
-
-```bash
-gmit config set-model <model-id>
+```sh
+gmit config
 ```
 
-In an interactive terminal, `gmit config list-models` opens a searchable list. Type to filter by model ID, name, or provider, use the arrow keys to move through results, then press Enter to save the selection as the default model. Without an interactive terminal, the command prints the full catalog.
+After setup, stage the changes you want Gmit to analyze and generate a preview:
 
-Prefer free models where available. Providers control pricing and billing, and Gommit cannot limit charges. Catalog prices may change; check with the provider before selecting a paid model.
-
-## Examples
-
-### Commit Message Examples
-
-```bash
-# For a new feature
-gmit commit
-# Output: "feat: add user authentication system"
-
-# For a bug fix
-gmit commit
-# Output: "fix: resolve memory leak in data processing"
-
-# For documentation
-gmit commit
-# Output: "docs: update API documentation with new endpoints"
+```sh
+git add src/file.go
+gmit commit --dry-run
 ```
 
-### Pull Request Examples
+`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. To create one commit automatically after generation, use `gmit commit --commit`. Without either option, Gmit asks whether to commit the generated message.
 
-```bash
-# Feature branch to main
+## Commands
+
+### `gmit commit`
+
+Generates a commit message from the **staged diff only**. Unstaged changes are not included. Stage the exact files you intend to include before running the command.
+
+```sh
+git add src/auth.go
+gmit commit                         # Generate, then ask whether to commit
+gmit commit --dry-run               # Generate and show; do not commit
+gmit commit --commit                # Generate and create one commit
+gmit commit --model provider/model-id # Use a specific configured-provider model
+```
+
+Options:
+
+- `--model <id>` or `-m <id>` uses that model instead of the configured default.
+- `--commit` creates a commit with the generated message and exits. It requires staged changes.
+- `--dry-run` skips the Git commit. It still contacts the provider and may incur charges.
+- `--force` is unsupported. Stage the intended changes and review the output instead.
+
+### `gmit pr`
+
+Generates a Markdown pull request description from the code diff between your current `HEAD` and the merge base with a remote-tracking branch. By default it fetches `origin` and compares against `origin/main`.
+
+```sh
 gmit pr
-# Generates comprehensive PR description with:
-# - Feature overview
-# - Implementation details
-# - Files changed
-# - Testing suggestions
-
-# Hotfix branch to develop
 gmit pr --base-branch develop
-# Focuses on bug fixes and urgent changes
+gmit pr --base-branch main --model provider/model-id
 ```
 
-## 🤝 Contributing
+Gmit requires the named branch to exist on the `origin` remote. If `origin` or the branch is unavailable, it stops with an error instead of generating a description from incomplete data. It fetches from `origin` but does not checkout branches, pull into your current branch, or modify the working tree. The output is the generated Markdown description; review it before opening a PR.
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for development setup and contribution guidelines.
+### `gmit validate <message>`
 
-## 📄 License
+Checks that a message is non-empty and reports whether it resembles Conventional Commits. It also gives heuristic warnings about summary length and imperative wording. This is a lightweight advisory check, not a complete validator or guarantee that a repository's commit policy will accept the message.
 
-MIT License - see the [LICENSE](LICENSE) file for details.
+```sh
+gmit validate "feat(auth): add token refresh"
+gmit validate "fixed the login bug"
+```
 
-## Acknowledgments
+The command exits successfully for any non-empty message; style issues are reported as warnings. An empty message is an error.
 
-- [OpenRouter](https://openrouter.ai/) and [xAI](https://x.ai/) for AI APIs
-- [Conventional Commits](https://www.conventionalcommits.org/) for the message format standard
-- [99designs/keyring](https://github.com/99designs/keyring) for secure storage
-- [joho/godotenv](https://github.com/joho/godotenv) for environment management
-- Go community for best practices and architecture patterns
+### `gmit config`
 
-## Support
+Run `gmit config` in an interactive terminal to select a provider, set up authentication, and choose a default model.
 
-If you encounter any issues or have questions:
+```sh
+gmit config
+gmit config list-models
+gmit config set-model provider/model-id
+gmit config summary
+gmit config validate
+gmit config get-model
+```
 
-1. Check the [Issues](https://github.com/PedroHercules/gommit/issues) page
-2. Create a new issue with detailed information
-3. Use `gmit help` for command-specific help
+`config list-models` fetches the active provider's current catalog. In a terminal it opens a searchable picker: type to filter, use arrow keys to move, press Enter to save the selected model, or Esc to cancel. In non-interactive output it prints the catalog. A model listed by a provider can still be unavailable, rate-limited, or incompatible with a request by the time it is used.
 
----
+`config set-key <key>` saves a key for the active provider. `get-key` displays a masked key, and `remove-key` removes it. Keys are stored using the operating system keyring. `config validate` checks the current provider configuration; it is different from `gmit validate <message>`.
 
-**Made with ❤️ by Pedro Hercules**
+For Grok OAuth, Gmit uses the official xAI Grok CLI and invokes its login flow. The CLI must remain installed and authenticated for this mode. Alternatively, choose xAI API-key authentication. See xAI's [Grok CLI guide](https://docs.x.ai/build/overview) and [CLI reference](https://docs.x.ai/build/cli/reference) for current details.
+
+### Other commands
+
+```sh
+gmit help
+gmit config help
+gmit version
+```
+
+Unknown commands and unsupported command options return an error. The old `--force` commit option is not supported.
+
+## Models, pricing, and billing
+
+Gmit sends prompts and diffs to the provider and model you select. OpenRouter and xAI control model availability, pricing, and billing; Gmit does not set prices, bill your account, or guarantee free use or cap charges. **You are responsible for charges incurred through your provider account.** A free model may have quotas, rate limits, change availability, or stop being free. Model catalogs and prices can change, so check current information before use.
+
+- OpenRouter: [model pricing](https://openrouter.ai/pricing/), [free models](https://openrouter.ai/collections/free-models), and [billing support](https://openrouter.ai/support).
+- xAI: [API pricing](https://docs.x.ai/developers/pricing) and [billing documentation](https://docs.x.ai/developers/faq/billing).
+
+`--dry-run` only skips creating a local Git commit. It does **not** skip model generation or provider billing. For lower cost, choose a model marked free when available and verify its current price in the provider's own catalog.
+
+## Availability and known limitations
+
+Gmit depends on provider APIs, model catalogs, authentication, network access, and response formats. Any of these can change or be temporarily unavailable; requests can fail because of provider outages, quotas, rate limits, unsupported models, or response limits. Gmit cannot guarantee that every listed model will work for every task.
+
+PR generation requires a successful fetch and `origin/<base-branch>`. It compares code changes from the merge base to `HEAD`; it does not include unstaged working-tree edits. Commit generation analyzes staged changes only. The commit-message validator uses simple heuristics and may report false positives or miss repository-specific rules.
+
+## License and support
+
+Gmit is released under the MIT License. Report bugs or request features in the [GitHub issue tracker](https://github.com/PedroHercules/gommit/issues).

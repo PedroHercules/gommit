@@ -61,7 +61,13 @@ func (r *CommandGitRepository) GetWorkingDiff() (*entities.GitDiff, error) {
 
 // GetDiffBetweenBranches returns the diff between two branches.
 func (r *CommandGitRepository) GetDiffBetweenBranches(branch1, branch2 string) (*entities.GitDiff, error) {
-	output, err := r.runGitCommand("log", branch1+".."+branch2)
+	if strings.TrimSpace(branch1) == "" || strings.TrimSpace(branch2) == "" {
+		return nil, errors.New("both base and head revisions are required")
+	}
+	if _, err := r.runGitCommand("rev-parse", "--verify", "--quiet", branch1+"^{commit}"); err != nil {
+		return nil, fmt.Errorf("base revision %q is unavailable; fetch the branch from origin and try again", branch1)
+	}
+	output, err := r.runGitCommand("diff", "--no-ext-diff", branch1+"..."+branch2)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff between branches: %w", err)
 	}
@@ -222,53 +228,6 @@ func (r *CommandGitRepository) FetchRemote() error {
 	_, err := r.runGitCommand("fetch", "origin")
 	if err != nil {
 		return fmt.Errorf("failed to fetch from remote: %w", err)
-	}
-
-	return nil
-}
-
-// UpdateBaseBranch updates the specified base branch with the latest changes from remote.
-func (r *CommandGitRepository) UpdateBaseBranch(baseBranch string) error {
-	// Get current branch to return to it later
-	currentBranch, err := r.GetCurrentBranch()
-	if err != nil {
-		return fmt.Errorf("failed to get current branch: %w", err)
-	}
-
-	// If we're already on the base branch, just pull
-	if currentBranch == baseBranch {
-		_, pullErr := r.runGitCommand("pull", "origin", baseBranch)
-		if pullErr != nil {
-			return fmt.Errorf("failed to pull latest changes for branch %s: %w", baseBranch, pullErr)
-		}
-		return nil
-	}
-
-	// Check if base branch exists locally
-	_, err = r.runGitCommand("show-ref", "--verify", "--quiet", "refs/heads/"+baseBranch)
-	if err != nil {
-		// Branch doesn't exist locally, create it from remote
-		_, err = r.runGitCommand("checkout", "-b", baseBranch, "origin/"+baseBranch)
-		if err != nil {
-			return fmt.Errorf("failed to create local branch %s from remote: %w", baseBranch, err)
-		}
-	} else {
-		// Branch exists locally, switch to it and pull
-		_, err = r.runGitCommand("checkout", baseBranch)
-		if err != nil {
-			return fmt.Errorf("failed to checkout branch %s: %w", baseBranch, err)
-		}
-
-		_, err = r.runGitCommand("pull", "origin", baseBranch)
-		if err != nil {
-			return fmt.Errorf("failed to pull latest changes for branch %s: %w", baseBranch, err)
-		}
-	}
-
-	// Return to original branch
-	_, err = r.runGitCommand("checkout", currentBranch)
-	if err != nil {
-		return fmt.Errorf("failed to return to original branch %s: %w", currentBranch, err)
 	}
 
 	return nil

@@ -4,121 +4,102 @@ import "fmt"
 
 var version = "dev"
 
-// showHelp displays the main help message.
 func (c *CLI) showHelp() error {
 	fmt.Println(`
-Gommit - AI-Powered Git Commit Message Generator
+Gmit - AI-assisted Git commit messages and PR descriptions
 
 USAGE:
-    gommit [COMMAND] [OPTIONS]
+    gmit <command> [options]
 
 COMMANDS:
-    commit              Generate and commit with AI (default)
-    pr                  Generate Pull Request description
-    config              Manage configuration
-    validate <message>  Validate a commit message
-    version             Show version information
-    help                Show this help message
+    commit              Generate a message from staged changes
+    pr                  Generate a pull request description
+    validate <message>  Check a commit message
+    config              Configure a provider, credentials, and model
+    version             Show version
+    help                Show help
 
 COMMIT OPTIONS:
-    --model, -m <model>    Use specific AI model
-    --commit              Generate message and commit automatically
-    --dry-run            Show what would be done without committing
-    --force              Force commit even with warnings
+    --model, -m <id>    Use a model from the configured provider
+    --commit            Create one Git commit after generation
+    --dry-run           Generate and display a message without committing
 
 PR OPTIONS:
-    --base-branch <branch> Specify base branch for comparison (default: main)
+    --base-branch <name>  Compare with origin/<name> (default: main)
+    --model, -m <id>      Use a model from the configured provider
 
 CONFIG COMMANDS:
-    config                   Open provider setup and model selector
-    config set-key <key>      Set active provider API key
-    config get-key           Show current API key (masked)
-    config remove-key        Remove API key
-    config set-model <model> Set default AI model
-    config get-model         Show current default model
-    config remove-model      Remove default model
-    config list-models       Search and select a model for the active provider
-    config summary           Show configuration summary
-    config validate          Validate current configuration
+    config                          Open interactive provider setup
+    config set-key <key>            Save a key for the active provider
+    config get-key                  Show the saved key (masked)
+    config remove-key               Remove the saved key
+    config set-model <model-id>     Set the default model
+    config get-model                Show the default model
+    config remove-model             Remove the default model
+    config list-models              Search/select or print available models
+    config summary                  Show configuration summary
+    config validate                 Check provider configuration
+    config help                     Show configuration help
 
 EXAMPLES:
-    gommit commit                           # Generate message and commit
-    gommit commit --model provider/model-id # Use a model from the active provider
-    gommit pr                               # Generate PR description
-    gommit pr --base-branch develop         # Generate PR against develop branch
-    gommit config set-key sk-xxx            # Set API key
-    gommit config list-models               # Search and select a model
-    gommit config summary                   # Show configuration summary   
-    gommit validate "feat: add new feature"  # Validate message
+    gmit config
+    gmit config list-models
+    gmit commit --dry-run
+    gmit commit --model provider/model-id
+    gmit commit --commit
+    gmit pr --base-branch main --model provider/model-id
+    gmit validate "feat: add user authentication"
 
 NOTES:
-    • Supports OpenRouter and Grok (xAI API key or official Grok CLI OAuth)
-    • Works with staged Git changes
-    • Supports Conventional Commits format
-    • Configuration is stored securely
-    • Providers control pricing and billing; Gommit cannot cap charges
+    • Commit generation uses staged changes only. Stage intended files with git add first.
+    • --dry-run still sends a request to your provider and may incur charges.
+    • OpenRouter and xAI control model availability, prices, and billing. Gmit cannot cap spending.
+    • Prefer models marked free and check provider pricing before use.
+    • PR generation fetches origin/<base>; it does not switch branches or pull into your branch.
+    • Run ` + "`gmit config help`" + ` for configuration details.
 
-For more information, visit: https://github.com/PedroHercules/gommit`)
-
+Repository: https://github.com/PedroHercules/gommit`)
 	return nil
 }
 
-// showConfigHelp displays help for config commands.
 func (c *CLI) showConfigHelp() error {
 	fmt.Println(`
-Gommit Configuration Commands
+Gmit configuration
 
 USAGE:
-    gommit config [COMMAND] [OPTIONS]
+    gmit config [COMMAND]
 
-Run gmit config without a command to select OpenRouter or Grok, authenticate, and choose a model.
+Run ` + "`gmit config`" + ` in a terminal to select OpenRouter or Grok, authenticate,
+and choose a model. For Grok OAuth, Gmit uses the official Grok CLI; if it is
+missing, Gmit offers to install it globally after asking you.
 
 COMMANDS:
-    set-key <key>      Set API key for the active provider
-    get-key           Show current API key (masked)
-    remove-key        Remove stored API key
-    set-model <model> Set default AI model
-    get-model         Show current default model
-    remove-model      Remove default model setting
-    list-models       Search and select a model for the active provider
-    summary           Show complete configuration summary
-    validate          Validate current configuration
+    set-key <key>       Save a key for the active provider
+    get-key             Show the saved key (masked)
+    remove-key          Remove the saved key
+    set-model <id>      Set the default model
+    get-model           Show the default model
+    remove-model        Remove the default model
+    list-models         Search/select models in a terminal; print catalog otherwise
+    summary             Show provider and model settings
+    validate            Check provider configuration
 
 EXAMPLES:
-    gmit config                                  # Interactive provider setup
-    gmit config set-key <key>                    # Set active provider API key
-    gommit config set-model provider/model-id    # Set default model
-    gommit config list-models                    # Search and select a model
-    gommit config summary                        # Check all settings
-    gommit config validate                       # Test configuration
+    gmit config
+    gmit config set-key <api-key>
+    gmit config list-models
+    gmit config set-model provider/model-id
+    gmit config summary
+    gmit config validate
 
-NOTES:
-    • API key is stored securely in system keyring
-    • Default model is used when --model is not specified
-    • Configuration is validated before use
-    • Some commands require valid API key
-    • The provider controls pricing and billing; Gommit cannot limit charges
-    • Check current prices before selecting paid models
-    • In an interactive terminal, list-models filters while you type; Enter saves the selected model as default
-    • Without an interactive terminal, list-models prints the full catalog`)
-
+API keys are stored in the operating system keyring. The default model is used
+when --model is omitted. Provider catalogs and authentication can change or be
+temporarily unavailable. Providers control all pricing and billing; Gmit cannot
+limit charges. Review current provider prices and prefer free models when available.`)
 	return nil
 }
 
-// showVersion displays version information.
 func (c *CLI) showVersion() error {
-	fmt.Printf(`
-Gommit v%s
-
-AI-Powered Git Commit Message Generator
-
-Built with:
-    • Go 1.21+
-    • OpenRouter and xAI APIs
-
-Author: Pedro Hercules
-License: MIT
-Repository: https://github.com/PedroHercules/gommit`, version)
-
+	fmt.Printf("Gmit v%s\nAI-assisted Git commit message and PR description generator\nRepository: https://github.com/PedroHercules/gommit\nLicense: MIT\n", version)
 	return nil
 }

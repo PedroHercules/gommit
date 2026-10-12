@@ -3,6 +3,7 @@ package usecases
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/PedroHercules/gommit/pkg/domain/entities"
 	"github.com/PedroHercules/gommit/pkg/domain/repositories"
@@ -38,6 +39,9 @@ func NewPullRequestUseCase(gitRepo repositories.GitRepository, llmRepo repositor
 }
 
 func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest) (*GeneratePrResponse, error) {
+	if req == nil || strings.TrimSpace(req.BaseBranch) == "" {
+		return nil, fmt.Errorf("base branch is required")
+	}
 	response := &GeneratePrResponse{
 		Warnings: []string{},
 	}
@@ -46,25 +50,14 @@ func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest)
 	log.Printf("Fetching latest changes from remote repository...")
 	err := uc.gitRepo.FetchRemote()
 	if err != nil {
-		log.Printf("Warning: Failed to fetch from remote: %v", err)
-		response.Warnings = append(response.Warnings, fmt.Sprintf("Could not fetch latest changes: %v", err))
-	} else {
-		log.Printf("Successfully fetched latest changes from remote")
+		return nil, fmt.Errorf("failed to fetch origin; PR generation requires origin/%s: %w", req.BaseBranch, err)
 	}
+	log.Printf("Fetched latest changes from origin")
 
-	// Step 2: Update base branch with latest changes
-	log.Printf("Updating base branch '%s' with latest changes...", req.BaseBranch)
-	err = uc.gitRepo.UpdateBaseBranch(req.BaseBranch)
-	if err != nil {
-		log.Printf("Warning: Failed to update base branch: %v", err)
-		response.Warnings = append(response.Warnings, fmt.Sprintf("Could not update base branch '%s': %v", req.BaseBranch, err))
-	} else {
-		log.Printf("Successfully updated base branch '%s' with latest changes", req.BaseBranch)
-	}
-
-	// Step 3: Get differences between current branch and updated base branch
-	log.Printf("Analyzing differences between '%s' and current branch...", req.BaseBranch)
-	diff, err := uc.gitRepo.GetDiffBetweenBranches(req.BaseBranch, "HEAD")
+	// Compare against the fetched remote-tracking ref without checking out or pulling.
+	baseRef := "origin/" + req.BaseBranch
+	log.Printf("Analyzing code changes between '%s' and current branch...", baseRef)
+	diff, err := uc.gitRepo.GetDiffBetweenBranches(baseRef, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff: %w", err)
 	}

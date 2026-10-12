@@ -19,9 +19,15 @@ import (
 // CLI represents the command-line interface.
 // It coordinates between user input and application services.
 type CLI struct {
-	commitService *commit_services.CommitService
+	commitService commitCommandService
 	configService *config_services.ConfigService
 	prService     *pr_services.ServiceContainer
+}
+
+type commitCommandService interface {
+	GenerateCommitPreview(commit_services.GenerateCommitPreviewDTO) (*commit_services.GenerateCommitPreviewEntity, error)
+	ConfirmCommit(commit_services.ConfirmCommitDTO) (*commit_services.ConfirmCommitEntity, error)
+	ValidateCommitMessage(string) (*commit_services.ValidateCommitMessageResult, error)
 }
 
 // NewCLI creates a new CLI instance.
@@ -52,48 +58,24 @@ func (c *CLI) Run(args []string) error {
 		return c.showVersion()
 	case "pr":
 		return c.handlePr(args[2:])
+	case "validate":
+		return c.handleValidate(args[2:])
 	default:
-		// If no subcommand is provided, default to commit
-		if strings.HasPrefix(command, "-") {
-			return c.showHelp()
-		}
-		// Treat the first argument as part of commit command
-		return c.handleCommit(args[1:])
+		return fmt.Errorf("unknown command %q; run `gmit help` to see available commands", command)
 	}
 }
 
 // handleCommit processes commit-related commands.
 func (c *CLI) handleCommit(args []string) error {
 	fmt.Println("Analyzing staged changes...")
-
-	// Parse commit flags
-	var model string
-	dryRun := false
-	force := false
-	autoCommit := false
-
-	// Simple flag parsing
-	for i, arg := range args {
-		switch arg {
-		case "--model", "-m":
-			if i+1 < len(args) {
-				model = args[i+1]
-			}
-		case "--commit":
-			autoCommit = true
-		case "--dry-run":
-			dryRun = true
-		case "--force":
-			force = true
-		}
+	model, dryRun, autoCommit, err := parseCommitArgs(args)
+	if err != nil {
+		return err
 	}
-
-	// Generate commit message
-	req := commit_services.GenerateCommitPreviewDTO{
-		Model:  model,
-		DryRun: dryRun,
-		Force:  force,
+	if dryRun && autoCommit {
+		return fmt.Errorf("--dry-run and --commit cannot be used together")
 	}
+	req := commit_services.GenerateCommitPreviewDTO{Model: model, DryRun: dryRun}
 
 	fmt.Println("Generating commit message with AI...")
 	resp, err := c.commitService.GenerateCommitPreview(req)
@@ -105,13 +87,11 @@ func (c *CLI) handleCommit(args []string) error {
 		return fmt.Errorf("commit generation failed: %s", resp.ErrorMessage)
 	}
 
-	// Display results
 	fmt.Printf("\nGenerated commit message:\n%s\n\n", resp.CommitMessage)
 	fmt.Printf("Changes summary: %s\n", resp.ChangesSummary)
 	fmt.Printf("Model used: %s\n", resp.Model)
 	fmt.Printf("Tokens consumed: %d\n", resp.TokensUsed)
 
-	// Show warnings if any
 	if len(resp.Warnings) > 0 {
 		fmt.Println("\nWarnings:")
 		for _, warning := range resp.Warnings {
@@ -119,28 +99,13 @@ func (c *CLI) handleCommit(args []string) error {
 		}
 	}
 
-	// If dry run, just show the message and exit
 	if dryRun {
 		fmt.Println("\nDry run completed - no changes were committed")
 		return nil
 	}
 
-	// If auto-commit was requested and successful, show result
 	if autoCommit {
-		confirmCommitResponse, confirmCommitErr := c.commitService.ConfirmCommit(commit_services.ConfirmCommitDTO{
-			Message: resp.CommitMessage,
-			DryRun:  dryRun,
-		})
-
-		if confirmCommitErr != nil {
-			return fmt.Errorf("failed to confirm commit: %w", confirmCommitErr)
-		}
-
-		if !confirmCommitResponse.Success {
-			return fmt.Errorf("commit confirmation failed: %s", confirmCommitResponse.ErrorMessage)
-		}
-
-		fmt.Printf("\nSuccessfully committed with hash: %s\n", confirmCommitResponse.CommitHash)
+		return c.commitGeneratedMessage(resp.CommitMessage)
 	}
 
 	// Ask user if they want to commit (only when --commit flag was not used)
@@ -153,20 +118,7 @@ func (c *CLI) handleCommit(args []string) error {
 
 	response = strings.TrimSpace(strings.ToLower(response))
 	if response == "y" || response == "yes" {
-		// Perform the actual commit
-		confirmCommitResponse, confirmCommitErr := c.commitService.ConfirmCommit(commit_services.ConfirmCommitDTO{
-			Message: resp.CommitMessage,
-			DryRun:  false,
-		})
-		if confirmCommitErr != nil {
-			return fmt.Errorf("failed to commit: %w", confirmCommitErr)
-		}
-
-		if !confirmCommitResponse.Success {
-			return fmt.Errorf("commit failed: %s", confirmCommitResponse.ErrorMessage)
-		}
-
-		fmt.Printf("\nSuccessfully committed with hash: %s\n", confirmCommitResponse.CommitHash)
+		return c.commitGeneratedMessage(resp.CommitMessage)
 	} else {
 		fmt.Println("\nCommit cancelled. To commit later, run: git commit -m \"" + resp.CommitMessage + "\"")
 	}
@@ -174,41 +126,109 @@ func (c *CLI) handleCommit(args []string) error {
 	return nil
 }
 
-func (c *CLI) handlePr(args []string) error {
-	fmt.Println("Analyzing repository changes...")
-
-	// Parse commit flags
-	var baseBranch string
-
-	// Simple flag parsing
-	for i, arg := range args {
-		switch arg {
-		case "--base-branch":
-			if i+1 < len(args) {
-				baseBranch = args[i+1]
+func parseCommitArgs(args []string) (model string, dryRun, autoCommit bool, err error) {
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--model", "-m":
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return "", false, false, fmt.Errorf("%s requires a model ID", args[i])
 			}
+			i++
+			model = args[i]
+		case "--commit":
+			autoCommit = true
+		case "--dry-run":
+			dryRun = true
+		case "--force":
+			return "", false, false, fmt.Errorf("--force is not supported; stage the changes you want to include and review the generated message")
+		default:
+			return "", false, false, fmt.Errorf("unsupported commit argument %q; run `gmit help`", args[i])
 		}
 	}
+	return model, dryRun, autoCommit, nil
+}
 
-	// Generate PR message
-	req := &pr_services.GeneratePRPreviewRequest{
-		BaseBranch: baseBranch,
+func (c *CLI) commitGeneratedMessage(message string) error {
+	result, err := c.commitService.ConfirmCommit(commit_services.ConfirmCommitDTO{Message: message})
+	if err != nil {
+		return fmt.Errorf("failed to commit: %w", err)
 	}
+	if !result.Success {
+		return fmt.Errorf("commit failed: %s", result.ErrorMessage)
+	}
+	fmt.Printf("\nSuccessfully committed with hash: %s\n", result.CommitHash)
+	return nil
+}
 
+func (c *CLI) handlePr(args []string) error {
+	fmt.Println("Analyzing repository changes...")
+	baseBranch, model, err := parsePRArgs(args)
+	if err != nil {
+		return err
+	}
+	req := &pr_services.GeneratePRPreviewRequest{BaseBranch: baseBranch, Model: model}
 	fmt.Println("Generating pull request description with AI...")
 	resp, err := c.prService.GeneratePRPreview(req)
 	if err != nil {
-		return fmt.Errorf("failed to generate PR message: %w", err)
+		return fmt.Errorf("failed to generate PR description: %w", err)
 	}
-
 	if !resp.Success {
-		return fmt.Errorf("PR message generation failed: %s", resp.ErrorMessage)
+		return fmt.Errorf("PR description generation failed: %s", resp.ErrorMessage)
 	}
+	fmt.Printf("Generated PR description:\n%s\n", resp.PullRequest.Body)
+	return nil
+}
 
-	// Display results
-	fmt.Printf("Generated PR title:\n%s\n\n", resp.PullRequest.Title)
-	fmt.Printf("\nGenerated PR description:\n%s\n\n", resp.PullRequest.Body)
+func parsePRArgs(args []string) (baseBranch, model string, err error) {
+	baseBranch = "main"
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--base-branch":
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return "", "", fmt.Errorf("--base-branch requires a branch name")
+			}
+			i++
+			baseBranch = args[i]
+		case "--model", "-m":
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return "", "", fmt.Errorf("%s requires a model ID", args[i])
+			}
+			i++
+			model = args[i]
+		default:
+			return "", "", fmt.Errorf("unsupported PR argument %q; run `gmit help`", args[i])
+		}
+	}
+	return baseBranch, model, nil
+}
 
+func (c *CLI) handleValidate(args []string) error {
+	message := strings.TrimSpace(strings.Join(args, " "))
+	if message == "" {
+		return fmt.Errorf("commit message is required; usage: gmit validate \"feat: add feature\"")
+	}
+	result, err := c.commitService.ValidateCommitMessage(message)
+	if err != nil {
+		return fmt.Errorf("failed to validate commit message: %w", err)
+	}
+	if !result.Valid {
+		if result.ErrorMessage != "" {
+			return fmt.Errorf("invalid commit message: %s", result.ErrorMessage)
+		}
+		return fmt.Errorf("invalid commit message")
+	}
+	fmt.Println("Commit message is non-empty.")
+	if result.IsConventional {
+		fmt.Println("Conventional Commits format: yes")
+	} else {
+		fmt.Println("Conventional Commits format: no")
+	}
+	for i, warning := range result.Warnings {
+		fmt.Printf("Warning: %s\n", warning)
+		if i < len(result.Suggestions) {
+			fmt.Printf("Suggestion: %s\n", result.Suggestions[i])
+		}
+	}
 	return nil
 }
 
