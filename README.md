@@ -9,6 +9,10 @@ Gmit is a command-line tool that uses OpenRouter or xAI Grok to draft Git commit
 - For Grok OAuth only: the official `grok` CLI. During setup, Gmit checks for it and, if it is missing, offers to install it globally with npm after asking you. You can also follow [xAI's current installation instructions](https://docs.x.ai/build/overview) yourself.
 - A terminal for interactive setup and model selection. Most commands also work non-interactively.
 
+## Supported platforms
+
+The npm package includes binaries for Windows, Linux, and macOS on x64 and ARM64. The release build cross-compiles all six targets. GitHub Actions currently runs the Go test suite on Ubuntu; Windows and macOS runtime behavior is not covered by native CI tests. WSL uses the Linux binary for your WSL architecture.
+
 Install Gmit globally with npm:
 
 ```sh
