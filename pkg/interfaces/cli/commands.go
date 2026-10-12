@@ -50,7 +50,7 @@ func NewCLI(commitService *commit_services.CommitService, configService *config_
 // This is the main entry point for command processing.
 func (c *CLI) Run(args []string) error {
 	if len(args) < 2 {
-		return c.showHelp()
+		return c.handleCommit(nil)
 	}
 
 	command := args[1]
@@ -68,6 +68,9 @@ func (c *CLI) Run(args []string) error {
 	case "validate":
 		return c.handleValidate(args[2:])
 	default:
+		if strings.HasPrefix(command, "-") {
+			return c.handleCommit(args[1:])
+		}
 		return fmt.Errorf("unknown command %q; run `gmit help` to see available commands", command)
 	}
 }
@@ -118,7 +121,7 @@ func (c *CLI) handleCommit(args []string) error {
 	if autoCommit {
 		return c.commitGeneratedMessage(resp.CommitMessage, false)
 	}
-	action, err := c.chooseCommitAction()
+	action, err := c.chooseCommitAction(resp.CommitMessage)
 	if err != nil {
 		return err
 	}
@@ -157,11 +160,11 @@ func parseCommitArgs(args []string) (model string, dryRun, autoCommit bool, err 
 	return model, dryRun, autoCommit, nil
 }
 
-func (c *CLI) chooseCommitAction() (string, error) {
+func (c *CLI) chooseCommitAction(message string) (string, error) {
 	if c.selectCommitAction != nil {
 		return c.selectCommitAction()
 	}
-	return promptChoice("Choose what to do with the generated commit", []string{
+	return promptChoiceWithMessage("Choose what to do with the generated commit", message, []string{
 		commitAndPushAction,
 		commitOnlyAction,
 		cancelCommitAction,
@@ -509,7 +512,7 @@ func (c *CLI) handleRemoveAPIKey() error {
 // handleSetModel processes the set-model command.
 func (c *CLI) handleSetModel(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("model is required. Usage: gommit config set-model <model-id>")
+		return fmt.Errorf("model is required. Usage: gmit config set-model <model-id>")
 	}
 
 	fmt.Println("Setting default model...")
@@ -542,7 +545,7 @@ func (c *CLI) handleGetModel() error {
 
 	if !resp.Configured {
 		fmt.Println("Default model is not configured")
-		fmt.Println("Run 'gommit config set-model <model-id>' to configure it")
+		fmt.Println("Run 'gmit config set-model <model-id>' to configure it")
 		return nil
 	}
 

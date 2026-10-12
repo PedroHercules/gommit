@@ -25,14 +25,19 @@ type pickerState struct {
 	search   bool
 	costNote bool
 	title    string
+	message  string
 }
 
 func promptChoice(title string, options []string) (string, error) {
+	return promptChoiceWithMessage(title, "", options)
+}
+
+func promptChoiceWithMessage(title, message string, options []string) (string, error) {
 	entries := make([]pickerEntry, len(options))
 	for i, option := range options {
 		entries[i] = pickerEntry{value: option, label: option}
 	}
-	selected, err := runInteractivePicker(title, entries, false, false)
+	selected, err := runInteractivePickerWithMessage(title, message, entries, false, false)
 	if err != nil || selected < 0 {
 		return "", err
 	}
@@ -60,6 +65,10 @@ func pickModel(models []repositories.LLMModel) (string, error) {
 }
 
 func runInteractivePicker(title string, entries []pickerEntry, searchable, costNote bool) (int, error) {
+	return runInteractivePickerWithMessage(title, "", entries, searchable, costNote)
+}
+
+func runInteractivePickerWithMessage(title, message string, entries []pickerEntry, searchable, costNote bool) (int, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
 		return -1, fmt.Errorf("could not initialize terminal: %w", err)
@@ -70,15 +79,20 @@ func runInteractivePicker(title string, entries []pickerEntry, searchable, costN
 	defer screen.Fini()
 	screen.EnablePaste()
 
-	return runPickerOnScreen(screen, title, entries, searchable, costNote)
+	return runPickerOnScreenWithMessage(screen, title, message, entries, searchable, costNote)
 }
 
 func runPickerOnScreen(screen tcell.Screen, title string, entries []pickerEntry, searchable, costNote bool) (int, error) {
+	return runPickerOnScreenWithMessage(screen, title, "", entries, searchable, costNote)
+}
+
+func runPickerOnScreenWithMessage(screen tcell.Screen, title, message string, entries []pickerEntry, searchable, costNote bool) (int, error) {
 	state := pickerState{
 		entries:  entries,
 		search:   searchable,
 		costNote: costNote,
 		title:    title,
+		message:  message,
 	}
 	state.render(screen)
 	for {
@@ -227,6 +241,19 @@ func (s *pickerState) render(screen tcell.Screen) {
 		putLine(screen, 0, row, "Free models are recommended. Verify prices with the provider.", width, mutedStyle)
 		row++
 	}
+	if s.message != "" {
+		putLine(screen, 0, row, "Generated commit message:", width, headerStyle)
+		row++
+		messageLines := wrapText(s.message, width-2)
+		availableMessageRows := max(1, height-row-6)
+		if len(messageLines) > availableMessageRows {
+			messageLines = append(messageLines[:availableMessageRows-1], "…")
+		}
+		for _, line := range messageLines {
+			putLine(screen, 1, row, line, width-1, defaultStyle)
+			row++
+		}
+	}
 	filtered := s.filteredEntries()
 	countText := fmt.Sprintf("%d options", len(filtered))
 	if s.search {
@@ -268,6 +295,28 @@ func (s *pickerState) render(screen tcell.Screen) {
 		putLine(screen, 0, detailStart+2, selected.price, width, mutedStyle)
 	}
 	screen.Show()
+}
+
+func wrapText(text string, width int) []string {
+	if width < 1 {
+		width = 1
+	}
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{""}
+	}
+	lines := make([]string, 0, len(words))
+	line := words[0]
+	for _, word := range words[1:] {
+		if len([]rune(line))+1+len([]rune(word)) <= width {
+			line += " " + word
+			continue
+		}
+		lines = append(lines, line)
+		line = word
+	}
+	lines = append(lines, line)
+	return lines
 }
 
 func putLine(screen tcell.Screen, x, y int, text string, width int, style tcell.Style) {

@@ -92,7 +92,7 @@ func (s *validationService) ValidateConfiguration() (*ValidateConfigurationRespo
 	}
 
 	if !modelResp.Configured {
-		response.Recommendations = append(response.Recommendations, "Consider setting a default model with 'gommit config set-model <model-id>' for faster commit generation")
+		response.Recommendations = append(response.Recommendations, "Consider setting a default model with 'gmit config set-model <model-id>' for faster commit generation")
 	}
 
 	modelsResp, err := s.configUC.GetAvailableModels()

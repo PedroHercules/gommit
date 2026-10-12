@@ -9,10 +9,10 @@ func (c *CLI) showHelp() error {
 Gmit - AI-assisted Git commit messages and PR descriptions
 
 USAGE:
-    gmit <command> [options]
+    gmit [command] [options]
 
 COMMANDS:
-    commit              Generate a message from staged changes
+    commit              Generate a message from staged changes (default)
     pr                  Generate a pull request description
     validate <message>  Check a commit message
     config              Configure a provider, credentials, and model
@@ -42,6 +42,7 @@ CONFIG COMMANDS:
     config help                     Show configuration help
 
 EXAMPLES:
+    gmit
     gmit config
     gmit config list-models
     gmit commit --dry-run

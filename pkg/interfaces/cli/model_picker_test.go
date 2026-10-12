@@ -111,6 +111,31 @@ func TestPickerMenuUsesArrowNavigation(t *testing.T) {
 	}
 }
 
+func TestCommitActionPickerShowsGeneratedMessageAboveOptions(t *testing.T) {
+	screen := newTestPickerScreen(t, 64, 16)
+	entries := []pickerEntry{
+		{value: commitAndPushAction, label: commitAndPushAction},
+		{value: commitOnlyAction, label: commitOnlyAction},
+		{value: cancelCommitAction, label: cancelCommitAction},
+	}
+	screen.InjectKey(tcell.KeyDown, 0, 0)
+	screen.InjectKey(tcell.KeyEnter, 0, 0)
+
+	selected, err := runPickerOnScreenWithMessage(screen, "Choose what to do with the generated commit", "feat(auth): add token refresh support", entries, false, false)
+	if err != nil {
+		t.Fatalf("runPickerOnScreenWithMessage() error = %v", err)
+	}
+	if selected != 1 {
+		t.Fatalf("selected entry index = %d, want 1", selected)
+	}
+	content := screenContent(screen)
+	for _, expected := range []string{"Generated commit message:", "feat(auth): add token refresh support", commitAndPushAction, commitOnlyAction, cancelCommitAction} {
+		if !strings.Contains(content, expected) {
+			t.Errorf("picker screen missing %q: %s", expected, content)
+		}
+	}
+}
+
 func TestPrintModelsIncludesPricingAndCostNotice(t *testing.T) {
 	models := []repositories.LLMModel{
 		{ID: "provider/free", PricingAvailable: true, Free: true},

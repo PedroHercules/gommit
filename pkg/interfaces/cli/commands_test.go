@@ -150,3 +150,34 @@ func TestTopLevelValidateRoutesMessageToValidator(t *testing.T) {
 		t.Fatalf("validate output = %q", output)
 	}
 }
+
+func TestBareGmitRunsCommitFlow(t *testing.T) {
+	service := &fakeCommitCommandService{
+		preview: &commit_services.GenerateCommitPreviewEntity{Success: true, CommitMessage: "feat: add test"},
+	}
+	cli := &CLI{
+		commitService: service,
+		selectCommitAction: func() (string, error) {
+			return cancelCommitAction, nil
+		},
+	}
+	if err := cli.Run([]string{"gmit"}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if service.preview == nil || service.confirmCall != 0 {
+		t.Fatalf("bare gmit should generate a preview and not commit; preview=%v commits=%d", service.preview != nil, service.confirmCall)
+	}
+}
+
+func TestBareGmitAcceptsCommitOptions(t *testing.T) {
+	service := &fakeCommitCommandService{
+		preview: &commit_services.GenerateCommitPreviewEntity{Success: true, CommitMessage: "feat: add test"},
+	}
+	cli := &CLI{commitService: service}
+	if err := cli.Run([]string{"gmit", "--dry-run"}); err != nil {
+		t.Fatalf("Run() error = %v", err)
+	}
+	if !service.previewDTO.DryRun || service.confirmCall != 0 {
+		t.Fatalf("gmit --dry-run should preview only; dry-run=%v commits=%d", service.previewDTO.DryRun, service.confirmCall)
+	}
+}

@@ -22,16 +22,19 @@ Run the interactive setup. Select OpenRouter or Grok, configure authentication, 
 
 ```sh
 gmit config
+gmit config validate
 ```
 
-After setup, stage the changes you want Gmit to analyze and generate a preview:
+Run `gmit config validate` after setup to check that Gmit can read your credentials and fetch the provider's model catalog before you generate a message.
+
+After setup, stage the changes you want Gmit to analyze. Running `gmit` by itself is an alias for `gmit commit`:
 
 ```sh
 git add src/file.go
-gmit commit --dry-run
+gmit --dry-run
 ```
 
-`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. By default, after generation a single-choice selector offers **Commit and push**, **Commit only**, and **Cancel**. Use the arrow keys to select one action and press Enter. A push sends the current branch to `origin` and sets its upstream. To create a commit automatically without the selector or push, use `gmit commit --commit`.
+`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. By default, after generation a single-choice selector displays the generated message above **Commit and push**, **Commit only**, and **Cancel**. Use the arrow keys to select one action and press Enter. A push sends the current branch to `origin` and sets its upstream. To create a commit automatically without the selector or push, use `gmit commit --commit`.
 
 ## Commands
 
@@ -41,6 +44,7 @@ Generates a commit message from the **staged diff only**. Unstaged changes are n
 
 ```sh
 git add src/auth.go
+gmit                                 # Same as gmit commit
 gmit commit                         # Generate, then choose push, commit, or cancel
 gmit commit --dry-run               # Generate and show; do not commit
 gmit commit --commit                # Generate and create one commit
