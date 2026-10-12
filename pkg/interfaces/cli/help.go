@@ -21,7 +21,7 @@ COMMANDS:
 
 COMMIT OPTIONS:
     --model, -m <id>    Use a model from the configured provider
-    --commit            Create one Git commit after generation
+    --commit            Create one Git commit without showing the selector
     --dry-run           Generate and display a message without committing
 
 PR OPTIONS:
@@ -52,6 +52,7 @@ EXAMPLES:
 
 NOTES:
     • Commit generation uses staged changes only. Stage intended files with git add first.
+    • After generation, choose Commit and push, Commit only, or Cancel with the arrow keys and Enter.
     • --dry-run still sends a request to your provider and may incur charges.
     • OpenRouter and xAI control model availability, prices, and billing. Gmit cannot cap spending.
     • Prefer models marked free and check provider pricing before use.

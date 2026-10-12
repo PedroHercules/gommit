@@ -24,6 +24,9 @@ type GitRepository interface {
 	// Returns the commit hash if successful.
 	Commit(message string) (string, error)
 
+	// PushCurrentBranch pushes HEAD to origin and sets the current branch's upstream.
+	PushCurrentBranch() error
+
 	// HasStagedChanges checks if there are any staged changes.
 	// Returns true if there are files in the staging area.
 	HasStagedChanges() (bool, error)

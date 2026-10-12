@@ -85,6 +85,14 @@ func (uc *CommitUseCase) CommitChanges(req CommitChangesRequest) (*CommitChanges
 	return response, nil
 }
 
+// PushCurrentBranch pushes the current branch to origin and sets its upstream.
+func (uc *CommitUseCase) PushCurrentBranch() error {
+	if !uc.gitRepo.IsGitRepository() {
+		return errors.New("not in a Git repository")
+	}
+	return uc.gitRepo.PushCurrentBranch()
+}
+
 // GetStatusResponse represents the output of getting repository status.
 type GetStatusResponse struct {
 	StagedFiles   []string
@@ -164,11 +172,11 @@ type ValidateCommitMessageRequest struct {
 
 // ValidateCommitMessageResponse represents the output of validating a commit message.
 type ValidateCommitMessageResponse struct {
-	Valid            bool
-	IsConventional   bool
-	Warnings         []string
-	Suggestions      []string
-	ErrorMessage     string
+	Valid          bool
+	IsConventional bool
+	Warnings       []string
+	Suggestions    []string
+	ErrorMessage   string
 }
 
 // ValidateCommitMessage validates a commit message against best practices.

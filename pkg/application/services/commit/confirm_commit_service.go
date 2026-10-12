@@ -48,3 +48,7 @@ func (commitService *ConfirmCommitService) ConfirmCommit(data ConfirmCommitDTO) 
 	response.CommitHash = commitResponse.CommitHash
 	return response, nil
 }
+
+func (commitService *ConfirmCommitService) PushCurrentBranch() error {
+	return commitService.confirmCommitUseCase.PushCurrentBranch()
+}

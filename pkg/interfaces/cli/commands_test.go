@@ -14,6 +14,7 @@ type fakeCommitCommandService struct {
 	previewDTO  commit_services.GenerateCommitPreviewDTO
 	confirm     *commit_services.ConfirmCommitEntity
 	confirmCall int
+	pushCall    int
 }
 
 func (f *fakeCommitCommandService) GenerateCommitPreview(dto commit_services.GenerateCommitPreviewDTO) (*commit_services.GenerateCommitPreviewEntity, error) {
@@ -28,6 +29,11 @@ func (f *fakeCommitCommandService) ConfirmCommit(commit_services.ConfirmCommitDT
 
 func (f *fakeCommitCommandService) ValidateCommitMessage(string) (*commit_services.ValidateCommitMessageResult, error) {
 	return &commit_services.ValidateCommitMessageResult{Valid: true}, nil
+}
+
+func (f *fakeCommitCommandService) PushCurrentBranch() error {
+	f.pushCall++
+	return nil
 }
 
 func TestParseCommitArgsRejectsUnsupportedOptionsAndForce(t *testing.T) {
@@ -88,6 +94,39 @@ func TestDryRunDoesNotCommit(t *testing.T) {
 	}
 	if !service.previewDTO.DryRun {
 		t.Fatal("dry-run request was not marked as dry-run")
+	}
+}
+
+func TestCommitSelectorExecutesOnlySelectedAction(t *testing.T) {
+	tests := []struct {
+		name        string
+		choice      string
+		wantCommits int
+		wantPushes  int
+	}{
+		{name: "commit and push", choice: commitAndPushAction, wantCommits: 1, wantPushes: 1},
+		{name: "commit only", choice: commitOnlyAction, wantCommits: 1},
+		{name: "cancel", choice: cancelCommitAction},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			service := &fakeCommitCommandService{
+				preview: &commit_services.GenerateCommitPreviewEntity{Success: true, CommitMessage: "feat: add test"},
+				confirm: &commit_services.ConfirmCommitEntity{Success: true, CommitHash: "abc123"},
+			}
+			cli := &CLI{
+				commitService: service,
+				selectCommitAction: func() (string, error) {
+					return tt.choice, nil
+				},
+			}
+			if err := cli.handleCommit(nil); err != nil {
+				t.Fatalf("handleCommit() error = %v", err)
+			}
+			if service.confirmCall != tt.wantCommits || service.pushCall != tt.wantPushes {
+				t.Fatalf("commit calls=%d push calls=%d, want %d and %d", service.confirmCall, service.pushCall, tt.wantCommits, tt.wantPushes)
+			}
+		})
 	}
 }
 

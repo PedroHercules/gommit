@@ -54,3 +54,7 @@ func (c *CommitService) ValidateCommitMessage(message string) (*ValidateCommitMe
 		ErrorMessage:   result.ErrorMessage,
 	}, nil
 }
+
+func (c *CommitService) PushCurrentBranch() error {
+	return c.services.confirmCommitService.PushCurrentBranch()
+}

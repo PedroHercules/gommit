@@ -96,6 +96,14 @@ func (r *CommandGitRepository) Commit(message string) (string, error) {
 	return strings.TrimSpace(hash), nil
 }
 
+// PushCurrentBranch pushes HEAD to origin and configures the upstream branch.
+func (r *CommandGitRepository) PushCurrentBranch() error {
+	if _, err := r.runGitCommand("push", "--set-upstream", "origin", "HEAD"); err != nil {
+		return fmt.Errorf("failed to push current branch to origin: %w", err)
+	}
+	return nil
+}
+
 // HasStagedChanges checks if there are any staged changes.
 func (r *CommandGitRepository) HasStagedChanges() (bool, error) {
 	output, err := r.runGitCommand("diff", "--cached", "--name-only")

@@ -52,6 +52,13 @@ func TestBranchDiffUsesCodeChangesWithoutChangingCheckoutOrWorktree(t *testing.T
 	if len(diff.Files) != 1 || diff.Files[0] != "feature.txt" {
 		t.Fatalf("diff files = %#v, want only committed feature.txt", diff.Files)
 	}
+	if err := repo.PushCurrentBranch(); err != nil {
+		t.Fatalf("PushCurrentBranch() error = %v", err)
+	}
+	upstream := mustRunGit(t, clone, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}")
+	if strings.TrimSpace(upstream) != "origin/feature" {
+		t.Fatalf("upstream = %q, want origin/feature", strings.TrimSpace(upstream))
+	}
 	branch, err := repo.GetCurrentBranch()
 	if err != nil || branch != "feature" {
 		t.Fatalf("current branch = %q, err = %v; want feature", branch, err)

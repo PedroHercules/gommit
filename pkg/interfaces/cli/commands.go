@@ -4,7 +4,6 @@
 package cli
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,16 +18,24 @@ import (
 // CLI represents the command-line interface.
 // It coordinates between user input and application services.
 type CLI struct {
-	commitService commitCommandService
-	configService *config_services.ConfigService
-	prService     *pr_services.ServiceContainer
+	commitService      commitCommandService
+	configService      *config_services.ConfigService
+	prService          *pr_services.ServiceContainer
+	selectCommitAction func() (string, error)
 }
 
 type commitCommandService interface {
 	GenerateCommitPreview(commit_services.GenerateCommitPreviewDTO) (*commit_services.GenerateCommitPreviewEntity, error)
 	ConfirmCommit(commit_services.ConfirmCommitDTO) (*commit_services.ConfirmCommitEntity, error)
 	ValidateCommitMessage(string) (*commit_services.ValidateCommitMessageResult, error)
+	PushCurrentBranch() error
 }
+
+const (
+	commitAndPushAction = "1. Commit and push"
+	commitOnlyAction    = "2. Commit only"
+	cancelCommitAction  = "3. Cancel"
+)
 
 // NewCLI creates a new CLI instance.
 func NewCLI(commitService *commit_services.CommitService, configService *config_services.ConfigService, prService *pr_services.ServiceContainer) *CLI {
@@ -75,6 +82,10 @@ func (c *CLI) handleCommit(args []string) error {
 	if dryRun && autoCommit {
 		return fmt.Errorf("--dry-run and --commit cannot be used together")
 	}
+	if !dryRun && !autoCommit && c.selectCommitAction == nil &&
+		(!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
+		return fmt.Errorf("commit choice requires an interactive terminal; use --commit to commit without push or --dry-run to preview only")
+	}
 	req := commit_services.GenerateCommitPreviewDTO{Model: model, DryRun: dryRun}
 
 	fmt.Println("Generating commit message with AI...")
@@ -105,25 +116,23 @@ func (c *CLI) handleCommit(args []string) error {
 	}
 
 	if autoCommit {
-		return c.commitGeneratedMessage(resp.CommitMessage)
+		return c.commitGeneratedMessage(resp.CommitMessage, false)
 	}
-
-	// Ask user if they want to commit (only when --commit flag was not used)
-	fmt.Print("\nDo you want to commit these changes? (y/N): ")
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
+	action, err := c.chooseCommitAction()
 	if err != nil {
-		return fmt.Errorf("failed to read user input: %w", err)
+		return err
 	}
-
-	response = strings.TrimSpace(strings.ToLower(response))
-	if response == "y" || response == "yes" {
-		return c.commitGeneratedMessage(resp.CommitMessage)
-	} else {
+	switch action {
+	case commitAndPushAction:
+		return c.commitGeneratedMessage(resp.CommitMessage, true)
+	case commitOnlyAction:
+		return c.commitGeneratedMessage(resp.CommitMessage, false)
+	case cancelCommitAction, "":
 		fmt.Println("\nCommit cancelled. To commit later, run: git commit -m \"" + resp.CommitMessage + "\"")
+		return nil
+	default:
+		return fmt.Errorf("unknown commit action %q", action)
 	}
-
-	return nil
 }
 
 func parseCommitArgs(args []string) (model string, dryRun, autoCommit bool, err error) {
@@ -148,7 +157,18 @@ func parseCommitArgs(args []string) (model string, dryRun, autoCommit bool, err 
 	return model, dryRun, autoCommit, nil
 }
 
-func (c *CLI) commitGeneratedMessage(message string) error {
+func (c *CLI) chooseCommitAction() (string, error) {
+	if c.selectCommitAction != nil {
+		return c.selectCommitAction()
+	}
+	return promptChoice("Choose what to do with the generated commit", []string{
+		commitAndPushAction,
+		commitOnlyAction,
+		cancelCommitAction,
+	})
+}
+
+func (c *CLI) commitGeneratedMessage(message string, push bool) error {
 	result, err := c.commitService.ConfirmCommit(commit_services.ConfirmCommitDTO{Message: message})
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
@@ -157,6 +177,12 @@ func (c *CLI) commitGeneratedMessage(message string) error {
 		return fmt.Errorf("commit failed: %s", result.ErrorMessage)
 	}
 	fmt.Printf("\nSuccessfully committed with hash: %s\n", result.CommitHash)
+	if push {
+		if err := c.commitService.PushCurrentBranch(); err != nil {
+			return fmt.Errorf("commit %s succeeded, but push failed: %w", result.CommitHash, err)
+		}
+		fmt.Println("Successfully pushed current branch to origin")
+	}
 	return nil
 }
 

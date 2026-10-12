@@ -31,7 +31,7 @@ git add src/file.go
 gmit commit --dry-run
 ```
 
-`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. To create one commit automatically after generation, use `gmit commit --commit`. Without either option, Gmit asks whether to commit the generated message.
+`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. By default, after generation a single-choice selector offers **Commit and push**, **Commit only**, and **Cancel**. Use the arrow keys to select one action and press Enter. A push sends the current branch to `origin` and sets its upstream. To create a commit automatically without the selector or push, use `gmit commit --commit`.
 
 ## Commands
 
@@ -41,7 +41,7 @@ Generates a commit message from the **staged diff only**. Unstaged changes are n
 
 ```sh
 git add src/auth.go
-gmit commit                         # Generate, then ask whether to commit
+gmit commit                         # Generate, then choose push, commit, or cancel
 gmit commit --dry-run               # Generate and show; do not commit
 gmit commit --commit                # Generate and create one commit
 gmit commit --model provider/model-id # Use a specific configured-provider model
@@ -50,8 +50,9 @@ gmit commit --model provider/model-id # Use a specific configured-provider model
 Options:
 
 - `--model <id>` or `-m <id>` uses that model instead of the configured default.
-- `--commit` creates a commit with the generated message and exits. It requires staged changes.
+- `--commit` creates a commit with the generated message and exits without pushing. It requires staged changes.
 - `--dry-run` skips the Git commit. It still contacts the provider and may incur charges.
+- The default post-generation selector is single-choice. **Commit and push** runs one commit, then pushes the current branch to `origin` with upstream tracking. If the push fails, the commit remains created and Gmit reports the push error.
 - `--force` is unsupported. Stage the intended changes and review the output instead.
 
 ### `gmit pr`
