@@ -6,12 +6,12 @@ var version = "dev"
 
 func (c *CLI) showHelp() error {
 	fmt.Println(`
-Gmit - AI-assisted Git commit messages and PR descriptions
+GMIT  /  AI-assisted Git workflow
 
-USAGE:
+USAGE
     gmit [command] [options]
 
-COMMANDS:
+COMMANDS
     commit              Generate a message from staged changes (default)
     pr                  Generate a pull request description
     validate <message>  Check a commit message
@@ -19,16 +19,16 @@ COMMANDS:
     version             Show version
     help                Show help
 
-COMMIT OPTIONS:
+COMMIT OPTIONS
     --model, -m <id>    Use a model from the configured provider
     --commit            Create one Git commit without showing the selector
     --dry-run           Generate and display a message without committing
 
-PR OPTIONS:
+PR OPTIONS
     --base-branch <name>  Compare with origin/<name> (default: main)
     --model, -m <id>      Use a model from the configured provider
 
-CONFIG COMMANDS:
+CONFIG COMMANDS
     config                          Open interactive provider setup
     config set-key <key>            Save a key for the active provider
     config get-key                  Show the saved key (masked)
@@ -41,7 +41,7 @@ CONFIG COMMANDS:
     config validate                 Check provider configuration
     config help                     Show configuration help
 
-EXAMPLES:
+EXAMPLES
     gmit
     gmit config
     gmit config list-models
@@ -51,15 +51,14 @@ EXAMPLES:
     gmit pr --base-branch main --model provider/model-id
     gmit validate "feat: add user authentication"
 
-NOTES:
-    • Commit generation uses staged changes only. Stage intended files with git add first.
-    • After generation, preview the complete message; Page Up/Page Down scroll it when needed.
-    • Use the arrow keys to select Commit and push, Commit only, or Cancel, then press Enter.
-    • --dry-run still sends a request to your provider and may incur charges.
-    • OpenRouter and xAI control model availability, prices, and billing. Gmit cannot cap spending.
-    • Prefer models marked free and check provider pricing before use.
-    • PR generation fetches origin/<base>; it does not switch branches or pull into your branch.
-    • Run ` + "`gmit config help`" + ` for configuration details.
+QUICK NOTES
+    › Commit generation uses staged changes only. Stage files with git add first.
+    › Review the full preview, then choose Commit and push, Commit only, or Cancel.
+    › --dry-run still sends a provider request and may incur charges.
+    ! OpenRouter and xAI control pricing and billing. Gmit cannot cap charges.
+    › Prefer free models and verify current prices with your provider.
+    › PR generation fetches origin/<base>; it does not switch branches or pull changes.
+    › Run ` + "`gmit config help`" + ` for configuration details.
 
 Repository: https://github.com/PedroHercules/gommit`)
 	return nil
@@ -67,16 +66,16 @@ Repository: https://github.com/PedroHercules/gommit`)
 
 func (c *CLI) showConfigHelp() error {
 	fmt.Println(`
-Gmit configuration
+GMIT  /  CONFIGURATION
 
-USAGE:
+USAGE
     gmit config [COMMAND]
 
 Run ` + "`gmit config`" + ` in a terminal to select OpenRouter or Grok, authenticate,
 and choose a model. For Grok OAuth, Gmit uses the official Grok CLI; if it is
 missing, Gmit offers to install it globally after asking you.
 
-COMMANDS:
+COMMANDS
     set-key <key>       Save a key for the active provider
     get-key             Show the saved key (masked)
     remove-key          Remove the saved key
@@ -95,7 +94,7 @@ EXAMPLES:
     gmit config summary
     gmit config validate
 
-API keys are stored in the operating system keyring. The default model is used
+API keys are stored in your system keyring. The default model is used
 when --model is omitted. Provider catalogs and authentication can change or be
 temporarily unavailable. Providers control all pricing and billing; Gmit cannot
 limit charges. Review current provider prices and prefer free models when available.`)

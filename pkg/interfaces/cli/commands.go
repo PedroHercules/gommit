@@ -77,7 +77,6 @@ func (c *CLI) Run(args []string) error {
 
 // handleCommit processes commit-related commands.
 func (c *CLI) handleCommit(args []string) error {
-	fmt.Println("Analyzing staged changes...")
 	model, dryRun, autoCommit, err := parseCommitArgs(args)
 	if err != nil {
 		return err
@@ -87,34 +86,40 @@ func (c *CLI) handleCommit(args []string) error {
 	}
 	if !dryRun && !autoCommit && c.selectCommitAction == nil &&
 		(!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
-		return fmt.Errorf("commit choice requires an interactive terminal; use --commit to commit without push or --dry-run to preview only")
+		return fmt.Errorf("an interactive terminal is required to choose a commit action; use --commit to commit without pushing or --dry-run to preview")
 	}
 	req := commit_services.GenerateCommitPreviewDTO{Model: model, DryRun: dryRun}
 
-	fmt.Println("Generating commit message with AI...")
-	resp, err := c.commitService.GenerateCommitPreview(req)
+	var resp *commit_services.GenerateCommitPreviewEntity
+	err = withSpinner("Drafting commit message", func() error {
+		var callErr error
+		resp, callErr = c.commitService.GenerateCommitPreview(req)
+		if callErr != nil {
+			return fmt.Errorf("failed to generate commit: %w", callErr)
+		}
+		if !resp.Success {
+			return fmt.Errorf("commit generation failed: %s", resp.ErrorMessage)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to generate commit: %w", err)
+		return err
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("commit generation failed: %s", resp.ErrorMessage)
-	}
-
-	fmt.Printf("\nGenerated commit message:\n%s\n\n", resp.CommitMessage)
-	fmt.Printf("Changes summary: %s\n", resp.ChangesSummary)
-	fmt.Printf("Model used: %s\n", resp.Model)
-	fmt.Printf("Tokens consumed: %d\n", resp.TokensUsed)
+	fmt.Printf("\nCommit preview\n%s\n\n", resp.CommitMessage)
+	fmt.Printf("Changes  %s\n", resp.ChangesSummary)
+	fmt.Printf("Model    %s\n", resp.Model)
+	fmt.Printf("Tokens   %d\n", resp.TokensUsed)
 
 	if len(resp.Warnings) > 0 {
-		fmt.Println("\nWarnings:")
+		fmt.Println("\n! Review these notes:")
 		for _, warning := range resp.Warnings {
 			fmt.Printf("  - %s\n", warning)
 		}
 	}
 
 	if dryRun {
-		fmt.Println("\nDry run completed - no changes were committed")
+		fmt.Println("\n✓ Preview complete; no changes were committed.")
 		return nil
 	}
 
@@ -131,7 +136,7 @@ func (c *CLI) handleCommit(args []string) error {
 	case commitOnlyAction:
 		return c.commitGeneratedMessage(resp.CommitMessage, false)
 	case cancelCommitAction, "":
-		fmt.Println("\nCommit cancelled. To commit later, run: git commit -m \"" + resp.CommitMessage + "\"")
+		fmt.Println("\n› Commit cancelled. Your changes are still staged.")
 		return nil
 	default:
 		return fmt.Errorf("unknown commit action %q", action)
@@ -164,7 +169,7 @@ func (c *CLI) chooseCommitAction(message string) (string, error) {
 	if c.selectCommitAction != nil {
 		return c.selectCommitAction()
 	}
-	return promptChoiceWithMessage("Choose what to do with the generated commit", message, []string{
+	return promptChoiceWithMessage("Select a commit action", message, []string{
 		commitAndPushAction,
 		commitOnlyAction,
 		cancelCommitAction,
@@ -179,32 +184,38 @@ func (c *CLI) commitGeneratedMessage(message string, push bool) error {
 	if !result.Success {
 		return fmt.Errorf("commit failed: %s", result.ErrorMessage)
 	}
-	fmt.Printf("\nSuccessfully committed with hash: %s\n", result.CommitHash)
+	fmt.Printf("\n✓ Commit created: %s\n", result.CommitHash)
 	if push {
 		if err := c.commitService.PushCurrentBranch(); err != nil {
 			return fmt.Errorf("commit %s succeeded, but push failed: %w", result.CommitHash, err)
 		}
-		fmt.Println("Successfully pushed current branch to origin")
+		fmt.Println("✓ Pushed current branch to origin.")
 	}
 	return nil
 }
 
 func (c *CLI) handlePr(args []string) error {
-	fmt.Println("Analyzing repository changes...")
 	baseBranch, model, err := parsePRArgs(args)
 	if err != nil {
 		return err
 	}
 	req := &pr_services.GeneratePRPreviewRequest{BaseBranch: baseBranch, Model: model}
-	fmt.Println("Generating pull request description with AI...")
-	resp, err := c.prService.GeneratePRPreview(req)
+	var resp *pr_services.GeneratePRPreviewResponse
+	err = withSpinner("Building pull request preview", func() error {
+		var callErr error
+		resp, callErr = c.prService.GeneratePRPreview(req)
+		if callErr != nil {
+			return fmt.Errorf("failed to generate PR description: %w", callErr)
+		}
+		if !resp.Success {
+			return fmt.Errorf("PR description generation failed: %s", resp.ErrorMessage)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to generate PR description: %w", err)
+		return err
 	}
-	if !resp.Success {
-		return fmt.Errorf("PR description generation failed: %s", resp.ErrorMessage)
-	}
-	fmt.Printf("Generated PR description:\n%s\n", resp.PullRequest.Body)
+	fmt.Printf("\nPull request preview\n%s\n", resp.PullRequest.Body)
 	return nil
 }
 
@@ -246,16 +257,16 @@ func (c *CLI) handleValidate(args []string) error {
 		}
 		return fmt.Errorf("invalid commit message")
 	}
-	fmt.Println("Commit message is non-empty.")
+	fmt.Println("✓ Commit message is not empty.")
 	if result.IsConventional {
-		fmt.Println("Conventional Commits format: yes")
+		fmt.Println("✓ Conventional Commits format detected.")
 	} else {
-		fmt.Println("Conventional Commits format: no")
+		fmt.Println("! Conventional Commits format not detected.")
 	}
 	for i, warning := range result.Warnings {
-		fmt.Printf("Warning: %s\n", warning)
+		fmt.Printf("! %s\n", warning)
 		if i < len(result.Suggestions) {
-			fmt.Printf("Suggestion: %s\n", result.Suggestions[i])
+			fmt.Printf("› Suggestion: %s\n", result.Suggestions[i])
 		}
 	}
 	return nil
@@ -296,12 +307,12 @@ func (c *CLI) handleConfig(args []string) error {
 }
 
 func (c *CLI) handleProviderSetup() error {
-	providerChoice, err := promptChoice("Choose a provider", []string{"OpenRouter", "Grok"})
+	providerChoice, err := promptChoice("Select a provider", []string{"OpenRouter", "Grok"})
 	if err != nil {
 		return err
 	}
 	if providerChoice == "" {
-		fmt.Println("Setup cancelled")
+		fmt.Println("› Setup cancelled.")
 		return nil
 	}
 	provider := "openrouter"
@@ -309,19 +320,19 @@ func (c *CLI) handleProviderSetup() error {
 	apiKey := ""
 
 	if providerChoice == "OpenRouter" {
-		fmt.Println("OpenRouter controls model pricing and billing. Gommit cannot cap charges; free models are recommended.")
+		fmt.Println("! OpenRouter controls pricing and billing; Gmit cannot cap charges. Free models are recommended.")
 		apiKey, err = promptAPIKey("OpenRouter API key")
 		if err != nil {
 			return err
 		}
 	} else {
 		provider = "grok"
-		authChoice, choiceErr := promptChoice("Connect to Grok using", []string{"OAuth login", "xAI API key"})
+		authChoice, choiceErr := promptChoice("Choose how to connect to Grok", []string{"OAuth login", "xAI API key"})
 		if choiceErr != nil {
 			return choiceErr
 		}
 		if authChoice == "" {
-			fmt.Println("Setup cancelled")
+			fmt.Println("› Setup cancelled.")
 			return nil
 		}
 		if authChoice == "OAuth login" {
@@ -333,7 +344,7 @@ func (c *CLI) handleProviderSetup() error {
 			}
 			authMethod = "oauth"
 		} else {
-			fmt.Println("xAI API usage may incur charges based on the selected model; Gommit cannot cap them.")
+			fmt.Println("! xAI controls pricing and billing; Gmit cannot cap charges. Check prices before use.")
 			apiKey, err = promptAPIKey("xAI API key")
 			if err != nil {
 				return err
@@ -341,32 +352,51 @@ func (c *CLI) handleProviderSetup() error {
 		}
 	}
 
-	modelsResponse, err := c.configService.GetAvailableModelsFor(provider, authMethod, apiKey)
+	var modelsResponse *config_services.GetAvailableModelsResponse
+	err = withSpinner("Loading provider models", func() error {
+		var callErr error
+		modelsResponse, callErr = c.configService.GetAvailableModelsFor(provider, authMethod, apiKey)
+		if callErr != nil {
+			return fmt.Errorf("could not load %s models: %w", provider, callErr)
+		}
+		if modelsResponse.ErrorMessage != "" {
+			return fmt.Errorf("could not load %s models: %s", provider, modelsResponse.ErrorMessage)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to list %s models: %w", provider, err)
-	}
-	if modelsResponse.ErrorMessage != "" {
-		return fmt.Errorf("failed to list %s models: %s", provider, modelsResponse.ErrorMessage)
+		return err
 	}
 	model, err := pickModel(modelsResponse.Models)
 	if err != nil {
 		return err
 	}
 	if model == "" {
-		fmt.Println("Setup cancelled")
+		fmt.Println("› Setup cancelled.")
 		return nil
 	}
-	if err := c.configService.ConfigureProvider(provider, authMethod, apiKey); err != nil {
-		return fmt.Errorf("failed to configure %s: %w", provider, err)
-	}
-	modelResponse, err := c.configService.SetProviderDefaultModel(provider, model)
+	err = withSpinner("Verifying provider connection", func() error {
+		return c.configService.ConfigureProvider(provider, authMethod, apiKey)
+	})
 	if err != nil {
-		return fmt.Errorf("failed to save model: %w", err)
+		return fmt.Errorf("could not save %s configuration: %w", provider, err)
 	}
-	if !modelResponse.Success {
-		return fmt.Errorf("failed to save model: %s", modelResponse.ErrorMessage)
+	var modelResponse *config_services.SetupModelResponse
+	err = withSpinner("Validating and saving selected model", func() error {
+		var callErr error
+		modelResponse, callErr = c.configService.SetProviderDefaultModel(provider, model)
+		if callErr != nil {
+			return fmt.Errorf("could not save the selected model: %w", callErr)
+		}
+		if !modelResponse.Success {
+			return fmt.Errorf("could not save the selected model: %s", modelResponse.ErrorMessage)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
-	fmt.Printf("Configured %s with model %s\n", providerChoice, model)
+	fmt.Printf("✓ %s is ready with model %s.\n", providerChoice, model)
 	return nil
 }
 
@@ -407,10 +437,10 @@ func ensureGrokCLI() error {
 	}
 	const docsURL = "https://docs.x.ai/build/enterprise"
 	const installPackage = "@xai-official/grok"
-	fmt.Println("OAuth requires the official Grok CLI.")
-	fmt.Printf("Check the current install instructions at %s\n", docsURL)
-	fmt.Printf("The documented npm package is %s. After checking the docs, Gommit can run: npm install --global %s\n", installPackage, installPackage)
-	confirmed, err := promptYesNo("Did you check the official docs and want Gommit to install this package globally? (y/N): ")
+	fmt.Println("! Grok OAuth requires the official Grok CLI.")
+	fmt.Printf("Install guide: %s\n", docsURL)
+	fmt.Printf("Package: %s — Gmit can install it globally with: npm install --global %s\n", installPackage, installPackage)
+	confirmed, err := promptYesNo("Have you reviewed the guide and want Gmit to install it globally? (y/N): ")
 	if err != nil {
 		return err
 	}
@@ -455,25 +485,30 @@ func (c *CLI) handleSetAPIKey(args []string) error {
 		return fmt.Errorf("API key is required. Usage: gommit config set-key <your-api-key>")
 	}
 
-	fmt.Println("Storing API key securely...")
-
 	req := config_services.SetupAPIKeyRequest{
 		APIKey:      args[0],
 		ValidateKey: true,
 	}
 
-	resp, err := c.configService.SetupAPIKey(req)
+	var resp *config_services.SetupAPIKeyResponse
+	err := withSpinner("Validating and saving API key", func() error {
+		var callErr error
+		resp, callErr = c.configService.SetupAPIKey(req)
+		if callErr != nil {
+			return fmt.Errorf("failed to set API key: %w", callErr)
+		}
+		if !resp.Success {
+			return fmt.Errorf("failed to set API key: %s", resp.ErrorMessage)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to set API key: %w", err)
+		return err
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("failed to set API key: %s", resp.ErrorMessage)
-	}
-
-	fmt.Printf("Success: %s\n", resp.Message)
+	fmt.Printf("✓ %s\n", resp.Message)
 	if resp.KeyMasked != "" {
-		fmt.Printf("API Key: %s\n", resp.KeyMasked)
+		fmt.Printf("API key  %s\n", resp.KeyMasked)
 	}
 
 	return nil
@@ -487,25 +522,25 @@ func (c *CLI) handleGetAPIKey() error {
 	}
 
 	if !resp.Configured {
-		fmt.Println("API key is not configured")
-		fmt.Println("Run 'gommit config set-key <your-api-key>' to configure it")
+		fmt.Println("! No API key is configured.")
+		fmt.Println("› Run `gmit config set-key <your-api-key>` to add one.")
 		return nil
 	}
 
-	fmt.Printf("API Key: %s\n", resp.MaskedAPIKey)
+	fmt.Printf("API key  %s\n", resp.MaskedAPIKey)
 	return nil
 }
 
 // handleRemoveAPIKey processes the remove-key command.
 func (c *CLI) handleRemoveAPIKey() error {
-	fmt.Println("Removing API key...")
+	fmt.Println("› Removing API key...")
 
 	err := c.configService.RemoveAPIKey()
 	if err != nil {
 		return fmt.Errorf("failed to remove API key: %w", err)
 	}
 
-	fmt.Println("API key removed successfully")
+	fmt.Println("✓ API key removed.")
 	return nil
 }
 
@@ -515,24 +550,29 @@ func (c *CLI) handleSetModel(args []string) error {
 		return fmt.Errorf("model is required. Usage: gmit config set-model <model-id>")
 	}
 
-	fmt.Println("Setting default model...")
-
 	req := config_services.SetupModelRequest{
 		Model:         args[0],
 		ValidateModel: true,
 	}
 
-	resp, err := c.configService.SetupDefaultModel(req)
+	var resp *config_services.SetupModelResponse
+	err := withSpinner("Validating and saving default model", func() error {
+		var callErr error
+		resp, callErr = c.configService.SetupDefaultModel(req)
+		if callErr != nil {
+			return fmt.Errorf("failed to set model: %w", callErr)
+		}
+		if !resp.Success {
+			return fmt.Errorf("failed to set model: %s", resp.ErrorMessage)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to set model: %w", err)
+		return err
 	}
 
-	if !resp.Success {
-		return fmt.Errorf("failed to set model: %s", resp.ErrorMessage)
-	}
-
-	fmt.Printf("Success: %s\n", resp.Message)
-	fmt.Println("Cost notice: the provider controls model pricing and billing; Gommit cannot limit charges. Check pricing before using paid models.")
+	fmt.Printf("✓ %s\n", resp.Message)
+	fmt.Println("! The provider controls pricing and billing; Gmit cannot cap charges. Check prices before using paid models.")
 	return nil
 }
 
@@ -544,43 +584,48 @@ func (c *CLI) handleGetModel() error {
 	}
 
 	if !resp.Configured {
-		fmt.Println("Default model is not configured")
-		fmt.Println("Run 'gmit config set-model <model-id>' to configure it")
+		fmt.Println("! No default model is configured.")
+		fmt.Println("› Run `gmit config set-model <model-id>` to choose one.")
 		return nil
 	}
 
-	fmt.Printf("Default Model: %s\n", resp.Model)
+	fmt.Printf("Default model  %s\n", resp.Model)
 	return nil
 }
 
 // handleRemoveModel processes the remove-model command.
 func (c *CLI) handleRemoveModel() error {
-	fmt.Println("Removing default model...")
+	fmt.Println("› Removing default model...")
 
 	err := c.configService.RemoveDefaultModel()
 	if err != nil {
 		return fmt.Errorf("failed to remove model: %w", err)
 	}
 
-	fmt.Println("Default model removed successfully")
+	fmt.Println("✓ Default model removed.")
 	return nil
 }
 
 // handleListModels processes the list-models command.
 func (c *CLI) handleListModels() error {
-	fmt.Println("Fetching available models...")
-
-	resp, err := c.configService.GetAvailableModels()
+	var resp *config_services.GetAvailableModelsResponse
+	err := withSpinner("Loading model catalog", func() error {
+		var callErr error
+		resp, callErr = c.configService.GetAvailableModels()
+		if callErr != nil {
+			return fmt.Errorf("failed to get models: %w", callErr)
+		}
+		if resp.ErrorMessage != "" {
+			return fmt.Errorf("failed to get models: %s", resp.ErrorMessage)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get models: %w", err)
-	}
-
-	if resp.ErrorMessage != "" {
-		return fmt.Errorf("failed to get models: %s", resp.ErrorMessage)
+		return err
 	}
 
 	if len(resp.Models) == 0 {
-		fmt.Println("No models available")
+		fmt.Println("! No models are available right now.")
 		return nil
 	}
 
@@ -595,7 +640,7 @@ func (c *CLI) handleListModels() error {
 		return fmt.Errorf("model search failed: %w", pickerErr)
 	}
 	if selectedModel == "" {
-		fmt.Println("Model selection cancelled")
+		fmt.Println("› Model selection cancelled.")
 		return nil
 	}
 	return c.handleSetModel([]string{selectedModel})
@@ -603,39 +648,46 @@ func (c *CLI) handleListModels() error {
 
 // handleConfigSummary processes the config summary command.
 func (c *CLI) handleConfigSummary() error {
-	resp, err := c.configService.GetConfigSummary()
+	var resp *config_services.ConfigSummaryResponse
+	err := withSpinner("Reading configuration and model catalog", func() error {
+		var callErr error
+		resp, callErr = c.configService.GetConfigSummary()
+		if callErr != nil {
+			return fmt.Errorf("failed to get config summary: %w", callErr)
+		}
+		if resp.ErrorMessage != "" {
+			return fmt.Errorf("failed to get config summary: %s", resp.ErrorMessage)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to get config summary: %w", err)
+		return err
 	}
 
-	if resp.ErrorMessage != "" {
-		return fmt.Errorf("failed to get config summary: %s", resp.ErrorMessage)
-	}
-
-	fmt.Println("\nConfiguration Summary:")
-	fmt.Printf("Provider: %s (%s)\n", resp.Provider, resp.AuthMethod)
+	fmt.Println("\nConfiguration")
+	fmt.Printf("Provider       %s (%s)\n", resp.Provider, resp.AuthMethod)
 
 	// Authentication status
 	if resp.AuthMethod == "oauth" && resp.APIKeyConfigured {
-		fmt.Printf("Authentication: %s\n", resp.APIKeyMasked)
+		fmt.Printf("Authentication %s\n", resp.APIKeyMasked)
 	} else if resp.APIKeyConfigured {
-		fmt.Printf("API Key: %s\n", resp.APIKeyMasked)
+		fmt.Printf("API key        %s\n", resp.APIKeyMasked)
 	} else {
-		fmt.Println("Authentication: Not configured")
+		fmt.Println("Authentication Not configured")
 	}
 
 	// Default model status
 	if resp.DefaultModelSet {
-		fmt.Printf("Default Model: %s\n", resp.DefaultModel)
+		fmt.Printf("Default model  %s\n", resp.DefaultModel)
 	} else {
-		fmt.Println("Default Model: Not configured")
+		fmt.Println("Default model  Not configured")
 	}
 
 	// Available models count
 	if resp.AvailableModelsCount > 0 {
-		fmt.Printf("Available Models: %d\n", resp.AvailableModelsCount)
+		fmt.Printf("Models         %d available\n", resp.AvailableModelsCount)
 	} else {
-		fmt.Println("Available Models: Unable to fetch")
+		fmt.Println("Models         Unable to load")
 	}
 
 	return nil
@@ -643,34 +695,39 @@ func (c *CLI) handleConfigSummary() error {
 
 // handleConfigValidate processes the config validate command.
 func (c *CLI) handleConfigValidate() error {
-	fmt.Println("Validating configuration...")
-
-	resp, err := c.configService.ValidateConfiguration()
+	var resp *config_services.ValidateConfigurationResponse
+	err := withSpinner("Checking provider and model availability", func() error {
+		var callErr error
+		resp, callErr = c.configService.ValidateConfiguration()
+		if callErr != nil {
+			return fmt.Errorf("failed to validate configuration: %w", callErr)
+		}
+		if resp.ErrorMessage != "" {
+			return fmt.Errorf("validation failed: %s", resp.ErrorMessage)
+		}
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("failed to validate configuration: %w", err)
-	}
-
-	if resp.ErrorMessage != "" {
-		return fmt.Errorf("validation failed: %s", resp.ErrorMessage)
+		return err
 	}
 
 	if resp.Valid {
-		fmt.Println("Configuration is valid and ready to use")
+		fmt.Println("✓ Configuration is ready.")
 	} else {
-		fmt.Println("Configuration has issues")
+		fmt.Println("! Configuration needs attention.")
 	}
 
 	if len(resp.Issues) > 0 {
-		fmt.Println("\nIssues:")
+		fmt.Println("\n! Issues")
 		for _, issue := range resp.Issues {
-			fmt.Printf("   • %s\n", issue)
+			fmt.Printf("  - %s\n", issue)
 		}
 	}
 
 	if len(resp.Recommendations) > 0 {
-		fmt.Println("\nRecommendations:")
+		fmt.Println("\n› Suggestions")
 		for _, rec := range resp.Recommendations {
-			fmt.Printf("   • %s\n", rec)
+			fmt.Printf("  - %s\n", rec)
 		}
 	}
 

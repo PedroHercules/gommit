@@ -20,6 +20,18 @@ npm install --global gmit
 gmit help
 ```
 
+### Test changes from a local checkout
+
+From the repository directory, use the `dev` Make target to run the source in this checkout. It does not replace the globally installed `gmit` command:
+
+```sh
+make dev ARGS="help"
+make dev ARGS="commit --dry-run"
+make dev ARGS="config list-models"
+```
+
+The Go toolchain and project dependencies must be available. The command runs Gmit with your normal user configuration, so provider requests can still incur charges.
+
 ## Quick start
 
 Run the interactive setup. Select OpenRouter or Grok, configure authentication, then search for and select a model.

@@ -97,6 +97,66 @@ func TestDryRunDoesNotCommit(t *testing.T) {
 	}
 }
 
+func TestDryRunUsesStatusMarkersAndPreservesGeneratedCommitMessage(t *testing.T) {
+	const generatedMessage = "feat(auth): add token refresh support"
+	service := &fakeCommitCommandService{preview: &commit_services.GenerateCommitPreviewEntity{
+		Success:        true,
+		CommitMessage:  generatedMessage,
+		ChangesSummary: "1 file changed",
+		Model:          "test/model",
+	}}
+	cli := &CLI{commitService: service}
+
+	oldStdout := os.Stdout
+	stdoutReader, stdoutWriter, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldStderr := os.Stderr
+	stderrReader, stderrWriter, err := os.Pipe()
+	if err != nil {
+		_ = stdoutReader.Close()
+		_ = stdoutWriter.Close()
+		t.Fatal(err)
+	}
+	os.Stdout = stdoutWriter
+	os.Stderr = stderrWriter
+	if err := cli.handleCommit([]string{"--dry-run"}); err != nil {
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+		_ = stdoutReader.Close()
+		_ = stderrReader.Close()
+		_ = stdoutWriter.Close()
+		_ = stderrWriter.Close()
+		t.Fatalf("handleCommit() error = %v", err)
+	}
+	os.Stdout = oldStdout
+	os.Stderr = oldStderr
+	_ = stdoutWriter.Close()
+	_ = stderrWriter.Close()
+	output, err := io.ReadAll(stdoutReader)
+	_ = stdoutReader.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	progress, err := io.ReadAll(stderrReader)
+	_ = stderrReader.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	text := string(output)
+	if !strings.Contains(string(progress), "› Drafting commit message") || !strings.Contains(string(progress), "✓ Drafting commit message complete.") {
+		t.Fatalf("dry-run progress output is missing status labels: %q", progress)
+	}
+	if !strings.Contains(text, "Commit preview\n"+generatedMessage+"\n") {
+		t.Fatalf("generated commit message was changed or omitted: %q", text)
+	}
+	if strings.Contains(text, "Drafting commit") || strings.Contains(text, "complete.") {
+		t.Fatalf("progress output polluted stdout: %q", text)
+	}
+}
+
 func TestCommitSelectorExecutesOnlySelectedAction(t *testing.T) {
 	tests := []struct {
 		name        string

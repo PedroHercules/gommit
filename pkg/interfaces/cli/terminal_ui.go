@@ -60,7 +60,7 @@ func pickModel(models []repositories.LLMModel) (string, error) {
 			price:  modelPickerPrice(model),
 		}
 	}
-	selected, err := runInteractivePicker("Choose a model", entries, true, true)
+	selected, err := runInteractivePicker("Select a model", entries, true, true)
 	if err != nil || selected < 0 {
 		return "", err
 	}
@@ -74,10 +74,10 @@ func runInteractivePicker(title string, entries []pickerEntry, searchable, costN
 func runInteractivePickerWithMessage(title, message string, entries []pickerEntry, searchable, costNote bool) (int, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
-		return -1, fmt.Errorf("could not initialize terminal: %w", err)
+		return -1, fmt.Errorf("could not start the terminal selector: %w", err)
 	}
 	if err := screen.Init(); err != nil {
-		return -1, fmt.Errorf("could not initialize terminal: %w", err)
+		return -1, fmt.Errorf("could not start the terminal selector: %w", err)
 	}
 	defer screen.Fini()
 	screen.EnablePaste()
@@ -93,7 +93,7 @@ func runPickerOnScreenWithMessage(screen tcell.Screen, title, message string, en
 	if message != "" {
 		_, height := screen.Size()
 		if height < 9 {
-			return -1, fmt.Errorf("terminal is too short to show the full commit message and choices; resize it to at least 9 rows")
+			return -1, fmt.Errorf("terminal is too short to show the full commit message and actions; resize it to at least 9 rows")
 		}
 	}
 	state := pickerState{
@@ -250,7 +250,7 @@ func (s *pickerState) render(screen tcell.Screen) {
 	headerStyle := tcell.StyleDefault.Foreground(tcell.ColorAqua).Bold(true)
 	mutedStyle := tcell.StyleDefault.Foreground(tcell.ColorGray)
 	if s.message != "" && height < 9 {
-		putLine(screen, 0, 0, "Terminal too short to show message and choices.", width, headerStyle)
+		putLine(screen, 0, 0, "Terminal space is too small for the full preview.", width, headerStyle)
 		putLine(screen, 0, 1, "Resize to at least 9 rows to continue.", width, mutedStyle)
 		s.messageViewportRows = 0
 		screen.Show()
@@ -260,11 +260,11 @@ func (s *pickerState) render(screen tcell.Screen) {
 	putLine(screen, 0, 0, s.title, width, headerStyle)
 	row := 1
 	if s.search {
-		putLine(screen, 0, row, "Search: "+string(s.query), width, defaultStyle.Bold(true))
+		putLine(screen, 0, row, "Search  "+string(s.query)+"_", width, defaultStyle.Bold(true))
 		row++
 	}
 	if s.costNote {
-		putLine(screen, 0, row, "Provider controls pricing and billing; Gommit cannot cap charges.", width, mutedStyle)
+		putLine(screen, 0, row, "Provider controls pricing and billing; Gmit cannot cap charges.", width, mutedStyle)
 		row++
 		putLine(screen, 0, row, "Free models are recommended. Verify prices with the provider.", width, mutedStyle)
 		row++
@@ -279,9 +279,9 @@ func (s *pickerState) render(screen tcell.Screen) {
 		maxScroll := max(0, len(messageLines)-s.messageViewportRows)
 		s.messageScroll = min(maxScroll, max(0, s.messageScroll))
 		if maxScroll > 0 {
-			putLine(screen, 0, row, fmt.Sprintf("Generated commit message (lines %d-%d of %d):", s.messageScroll+1, s.messageScroll+s.messageViewportRows, len(messageLines)), width, headerStyle)
+			putLine(screen, 0, row, fmt.Sprintf("Commit message preview · lines %d-%d of %d:", s.messageScroll+1, s.messageScroll+s.messageViewportRows, len(messageLines)), width, headerStyle)
 		} else {
-			putLine(screen, 0, row, "Generated commit message:", width, headerStyle)
+			putLine(screen, 0, row, "Commit message preview:", width, headerStyle)
 		}
 		row++
 		for _, line := range messageLines[s.messageScroll : s.messageScroll+s.messageViewportRows] {
@@ -290,15 +290,15 @@ func (s *pickerState) render(screen tcell.Screen) {
 		}
 	}
 	filtered := s.filteredEntries()
-	countText := fmt.Sprintf("%d options", len(filtered))
+	countText := fmt.Sprintf("%d choices", len(filtered))
 	if s.search {
-		countText = fmt.Sprintf("%d models | Type to filter", len(filtered))
+		countText = fmt.Sprintf("%d models · type to filter", len(filtered))
 	}
-	controls := countText + " | ↑/↓ move | Enter select | Esc cancel"
+	controls := countText + " · ↑/↓ move · Enter select · Esc cancel"
 	if s.message != "" {
-		controls = "↑/↓ choose | Enter select | Esc cancel"
+		controls = "↑/↓ choose · Enter confirm · Esc cancel"
 		if len(wrapText(s.message, width-2)) > s.messageViewportRows {
-			controls += " | PgUp/PgDn preview"
+			controls += " · PgUp/PgDn preview"
 		}
 	}
 	putLine(screen, 0, row, controls, width, mutedStyle)
@@ -326,7 +326,7 @@ func (s *pickerState) render(screen tcell.Screen) {
 		putLine(screen, 0, listStart+screenRow, marker+filtered[entryIndex].label, width, style)
 	}
 	if len(filtered) == 0 && visibleRows > 0 {
-		putLine(screen, 2, listStart, "No matching options", width-2, mutedStyle)
+		putLine(screen, 2, listStart, "No matches · try a different search", width-2, mutedStyle)
 	}
 
 	if detailsHeight > 0 {
@@ -381,7 +381,7 @@ func modelPickerLabel(model repositories.LLMModel) string {
 	}
 	switch {
 	case !model.PricingAvailable:
-		label = "[PRICE UNKNOWN] " + label
+		label = "[PRICE?] " + label
 	case model.Free:
 		label = "[FREE] " + label
 	default:
@@ -404,7 +404,7 @@ func modelPickerDetails(model repositories.LLMModel) string {
 func modelPickerPrice(model repositories.LLMModel) string {
 	switch {
 	case !model.PricingAvailable:
-		return "Price unknown"
+		return "Price unknown · check provider"
 	case model.Free:
 		return "Price: free"
 	default:
@@ -413,10 +413,10 @@ func modelPickerPrice(model repositories.LLMModel) string {
 }
 
 func printModels(output io.Writer, models []repositories.LLMModel) error {
-	if _, err := fmt.Fprintf(output, "\nAvailable Models (%d):\n\n", len(models)); err != nil {
+	if _, err := fmt.Fprintf(output, "\nMODELS  /  %d available\n\n", len(models)); err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintln(output, "Model pricing can incur charges. The provider controls billing; Gommit does not control or limit costs. Prefer free models."); err != nil {
+	if _, err := fmt.Fprintln(output, "! Providers control pricing and billing; Gmit cannot cap charges. Prefer free models."); err != nil {
 		return err
 	}
 	for _, model := range models {

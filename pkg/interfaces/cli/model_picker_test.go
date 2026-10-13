@@ -52,7 +52,7 @@ func TestPickerFiltersAndSelectsWithArrowKeys(t *testing.T) {
 	screen.InjectKey(tcell.KeyDown, 0, 0)
 	screen.InjectKey(tcell.KeyEnter, 0, 0)
 
-	selected, err := runPickerOnScreen(screen, "Choose a model", entries, true, true)
+	selected, err := runPickerOnScreen(screen, "Select a model", entries, true, true)
 	if err != nil {
 		t.Fatalf("runPickerOnScreen() error = %v", err)
 	}
@@ -76,7 +76,7 @@ func TestPickerSupportsUnicodeSearchAndBackspace(t *testing.T) {
 	screen.InjectKey(tcell.KeyBackspace2, 0, 0)
 	screen.InjectKey(tcell.KeyEnter, 0, 0)
 
-	selected, err := runPickerOnScreen(screen, "Choose a model", entries, true, false)
+	selected, err := runPickerOnScreen(screen, "Select a model", entries, true, false)
 	if err != nil {
 		t.Fatalf("runPickerOnScreen() error = %v", err)
 	}
@@ -89,7 +89,7 @@ func TestPickerCancelsOnEscape(t *testing.T) {
 	screen := newTestPickerScreen(t, 80, 24)
 	screen.InjectKey(tcell.KeyEscape, 0, 0)
 
-	selected, err := runPickerOnScreen(screen, "Choose provider", []pickerEntry{{value: "OpenRouter", label: "OpenRouter"}}, false, false)
+	selected, err := runPickerOnScreen(screen, "Select provider", []pickerEntry{{value: "OpenRouter", label: "OpenRouter"}}, false, false)
 	if err != nil {
 		t.Fatalf("runPickerOnScreen() error = %v", err)
 	}
@@ -104,7 +104,7 @@ func TestPickerMenuUsesArrowNavigation(t *testing.T) {
 	screen.InjectKey(tcell.KeyEnter, 0, 0)
 	entries := []pickerEntry{{value: "OpenRouter", label: "OpenRouter"}, {value: "Grok", label: "Grok"}}
 
-	selected, err := runPickerOnScreen(screen, "Choose a provider", entries, false, false)
+	selected, err := runPickerOnScreen(screen, "Select a provider", entries, false, false)
 	if err != nil {
 		t.Fatalf("runPickerOnScreen() error = %v", err)
 	}
@@ -131,7 +131,7 @@ func TestCommitActionPickerShowsGeneratedMessageAboveOptions(t *testing.T) {
 		t.Fatalf("selected entry index = %d, want 1", selected)
 	}
 	content := screenContent(screen)
-	for _, expected := range []string{"Generated commit message:", "feat(auth): add token refresh support", commitAndPushAction, commitOnlyAction, cancelCommitAction} {
+	for _, expected := range []string{"Commit message preview:", "feat(auth): add token refresh support", commitAndPushAction, commitOnlyAction, cancelCommitAction} {
 		if !strings.Contains(content, expected) {
 			t.Errorf("picker screen missing %q: %s", expected, content)
 		}

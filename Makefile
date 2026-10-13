@@ -1,6 +1,6 @@
 # Makefile para gmit
 
-.PHONY: build clean test install help
+.PHONY: build dev clean test install help
 
 # Variáveis
 VERSION ?= $(shell node -p "require('./package.json').version")
@@ -14,6 +14,10 @@ build:
 	@mkdir -p $(BIN_DIR)
 	go build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY_NAME) .
 	@echo "✓ Build concluído: $(BIN_DIR)/$(BINARY_NAME)"
+
+# Executa o código deste checkout sem instalar ou substituir a versão global.
+dev:
+	go run . $(ARGS)
 
 # Build para todas as plataformas
 build-all:
@@ -55,6 +59,7 @@ install: build
 help:
 	@echo "Comandos disponíveis:"
 	@echo "  build      - Compila para o sistema atual"
+	@echo "  dev        - Executa o código local (ex.: make dev ARGS=help)"
 	@echo "  build-all  - Compila para todas as plataformas"
 	@echo "  test       - Executa os testes"
 	@echo "  clean      - Remove arquivos de build"

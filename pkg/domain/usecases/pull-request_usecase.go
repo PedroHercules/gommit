@@ -2,7 +2,6 @@ package usecases
 
 import (
 	"fmt"
-	"log"
 	"strings"
 
 	"github.com/PedroHercules/gommit/pkg/domain/entities"
@@ -47,16 +46,13 @@ func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest)
 	}
 
 	// Step 1: Fetch latest changes from remote
-	log.Printf("Fetching latest changes from remote repository...")
 	err := uc.gitRepo.FetchRemote()
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch origin; PR generation requires origin/%s: %w", req.BaseBranch, err)
 	}
-	log.Printf("Fetched latest changes from origin")
 
 	// Compare against the fetched remote-tracking ref without checking out or pulling.
 	baseRef := "origin/" + req.BaseBranch
-	log.Printf("Analyzing code changes between '%s' and current branch...", baseRef)
 	diff, err := uc.gitRepo.GetDiffBetweenBranches(baseRef, "HEAD")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get diff: %w", err)
@@ -79,7 +75,6 @@ func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest)
 	}
 
 	// Step 8: Generate PR preview with AI
-	log.Printf("Generating PR description using AI model: %s", modelToUse)
 	llmResponse, err := uc.llmRepo.GeneratePRDescription(diff, modelToUse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate PR preview: %w", err)
@@ -90,8 +85,6 @@ func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest)
 	if !llmResponse.Success {
 		return nil, fmt.Errorf("LLM generation failed: %s", llmResponse.Error)
 	}
-
-	log.Printf("Successfully generated PR description")
 
 	// Extract title and body from LLM response
 	body := llmResponse.Message

@@ -17,13 +17,13 @@ import (
 func main() {
 	configRepo, err := config.NewFileConfigRepository()
 	if err != nil {
-		fmt.Printf("Error creating config repository: %v\n", err)
+		fmt.Printf("✗ Startup failed — could not open configuration: %v\n", err)
 		os.Exit(1)
 	}
 
 	gitRepo, err := git.NewCommandGitRepository("")
 	if err != nil {
-		fmt.Printf("Error creating git repository: %v\n", err)
+		fmt.Printf("✗ Startup failed — could not initialize Git: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -45,7 +45,7 @@ func main() {
 	cliHandler := cli.NewCLI(commitService, configService, pullRequestService)
 
 	if err := cliHandler.Run(os.Args); err != nil {
-		fmt.Printf("Error: %v\n", err)
+		fmt.Printf("✗ %v\n", err)
 		os.Exit(1)
 	}
 }
