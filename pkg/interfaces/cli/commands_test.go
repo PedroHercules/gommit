@@ -206,7 +206,7 @@ func TestTopLevelValidateRoutesMessageToValidator(t *testing.T) {
 	}
 	_ = w.Close()
 	output, _ := io.ReadAll(r)
-	if !strings.Contains(string(output), "non-empty") {
+	if !strings.Contains(string(output), "not empty") {
 		t.Fatalf("validate output = %q", output)
 	}
 }
