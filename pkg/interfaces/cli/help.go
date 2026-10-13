@@ -53,7 +53,8 @@ EXAMPLES:
 
 NOTES:
     • Commit generation uses staged changes only. Stage intended files with git add first.
-    • After generation, choose Commit and push, Commit only, or Cancel with the arrow keys and Enter.
+    • After generation, preview the complete message; Page Up/Page Down scroll it when needed.
+    • Use the arrow keys to select Commit and push, Commit only, or Cancel, then press Enter.
     • --dry-run still sends a request to your provider and may incur charges.
     • OpenRouter and xAI control model availability, prices, and billing. Gmit cannot cap spending.
     • Prefer models marked free and check provider pricing before use.

@@ -38,7 +38,7 @@ git add src/file.go
 gmit --dry-run
 ```
 
-`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. By default, after generation a single-choice selector displays the generated message above **Commit and push**, **Commit only**, and **Cancel**. Use the arrow keys to select one action and press Enter. A push sends the current branch to `origin` and sets its upstream. To create a commit automatically without the selector or push, use `gmit commit --commit`.
+`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. By default, after generation a single-choice selector displays the generated message above **Commit and push**, **Commit only**, and **Cancel**. Use Page Up/Page Down to scroll long messages, the arrow keys to select one action, and Enter to confirm. A push sends the current branch to `origin` and sets its upstream. To create a commit automatically without the selector or push, use `gmit commit --commit`.
 
 ## Commands
 

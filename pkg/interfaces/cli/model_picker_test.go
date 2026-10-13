@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -133,6 +135,110 @@ func TestCommitActionPickerShowsGeneratedMessageAboveOptions(t *testing.T) {
 		if !strings.Contains(content, expected) {
 			t.Errorf("picker screen missing %q: %s", expected, content)
 		}
+	}
+}
+
+func TestLongCommitMessageScrollsWithoutHidingActions(t *testing.T) {
+	screen := newTestPickerScreen(t, 64, 12)
+	entries := commitActionEntries()
+	var messageLines []string
+	for i := 0; i < 20; i++ {
+		messageLines = append(messageLines, fmt.Sprintf("commit-line-%02d", i))
+	}
+	state := pickerState{
+		entries: entries,
+		title:   "Choose what to do with the generated commit",
+		message: strings.Join(messageLines, "\n"),
+	}
+	state.render(screen)
+	if content := screenContent(screen); !strings.Contains(content, "commit-line-00") || !strings.Contains(content, "PgUp/PgDn preview") {
+		t.Fatalf("first message line and scroll instructions should be visible initially: %s", content)
+	}
+
+	for i := 0; i < 100; i++ {
+		state.handleKey(tcell.NewEventKey(tcell.KeyPgDn, 0, tcell.ModNone))
+	}
+	state.render(screen)
+	content := screenContent(screen)
+	for _, expected := range []string{"commit-line-19", commitAndPushAction, commitOnlyAction, cancelCommitAction} {
+		if !strings.Contains(content, expected) {
+			t.Errorf("scrolled picker missing %q: %s", expected, content)
+		}
+	}
+	if state.cursor != 0 {
+		t.Fatalf("scrolling the message changed the selected action to %d", state.cursor)
+	}
+
+	for i := 0; i < 100; i++ {
+		state.handleKey(tcell.NewEventKey(tcell.KeyPgUp, 0, tcell.ModNone))
+	}
+	state.render(screen)
+	if content := screenContent(screen); !strings.Contains(content, "commit-line-00") {
+		t.Fatalf("PageUp should return to the start of the complete message: %s", content)
+	}
+}
+
+func TestCommitMessageWrappingPreservesNewlinesAndAllText(t *testing.T) {
+	message := "feat: add token refresh\n\nA longer explanation for this change."
+	wrapped := wrapText(message, 12)
+	joined := strings.Join(wrapped, "\n")
+	want := "feat: add \ntoken \nrefresh\n\nA longer \nexplanation \nfor this \nchange."
+	if joined != want {
+		t.Fatalf("wrapped message = %q, want %q", joined, want)
+	}
+}
+
+func TestCommitMessageWrappingPreservesListIndentation(t *testing.T) {
+	message := "feat: add support\n\n  - first item\n    - nested item"
+	want := []string{"feat: add ", "support", "", "  - first ", "item", "    - ", "nested item"}
+	if got := wrapText(message, 12); !reflect.DeepEqual(got, want) {
+		t.Fatalf("wrapped message = %#v, want %#v", got, want)
+	}
+}
+
+func TestCommitActionPickerRequiresEnoughTerminalHeight(t *testing.T) {
+	screen := newTestPickerScreen(t, 80, 8)
+	_, err := runPickerOnScreenWithMessage(screen, "Choose an action", "feat: add test", commitActionEntries(), false, false)
+	if err == nil || !strings.Contains(err.Error(), "at least 9 rows") {
+		t.Fatalf("expected actionable minimum-height error, got %v", err)
+	}
+}
+
+func TestCommitMessagePreviewAdjustsAfterTerminalResize(t *testing.T) {
+	screen := newTestPickerScreen(t, 64, 12)
+	var messageLines []string
+	for i := 0; i < 20; i++ {
+		messageLines = append(messageLines, fmt.Sprintf("resize-line-%02d", i))
+	}
+	state := pickerState{entries: commitActionEntries(), title: "Choose an action", message: strings.Join(messageLines, "\n")}
+	state.render(screen)
+	for i := 0; i < 100; i++ {
+		state.handleKey(tcell.NewEventKey(tcell.KeyPgDn, 0, tcell.ModNone))
+	}
+	screen.SetSize(64, 24)
+	state.render(screen)
+	if state.messageScroll+state.messageViewportRows != state.messageLineCount {
+		t.Fatalf("after resize, message viewport %d-%d does not reach the final line of %d", state.messageScroll+1, state.messageScroll+state.messageViewportRows, state.messageLineCount)
+	}
+	content := screenContent(screen)
+	for _, action := range []string{commitAndPushAction, commitOnlyAction, cancelCommitAction} {
+		if !strings.Contains(content, action) {
+			t.Errorf("resized picker hides %q: %s", action, content)
+		}
+	}
+	state.handleKey(tcell.NewEventKey(tcell.KeyPgUp, 0, tcell.ModNone))
+	state.handleKey(tcell.NewEventKey(tcell.KeyPgUp, 0, tcell.ModNone))
+	state.render(screen)
+	if content := screenContent(screen); !strings.Contains(content, "resize-line-00") {
+		t.Fatalf("resized preview cannot scroll back to the first message line: %s", content)
+	}
+}
+
+func commitActionEntries() []pickerEntry {
+	return []pickerEntry{
+		{value: commitAndPushAction, label: commitAndPushAction},
+		{value: commitOnlyAction, label: commitOnlyAction},
+		{value: cancelCommitAction, label: cancelCommitAction},
 	}
 }
 

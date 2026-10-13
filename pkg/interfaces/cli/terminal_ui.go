@@ -19,13 +19,16 @@ type pickerEntry struct {
 }
 
 type pickerState struct {
-	entries  []pickerEntry
-	query    []rune
-	cursor   int
-	search   bool
-	costNote bool
-	title    string
-	message  string
+	entries             []pickerEntry
+	query               []rune
+	cursor              int
+	search              bool
+	costNote            bool
+	title               string
+	message             string
+	messageScroll       int
+	messageViewportRows int
+	messageLineCount    int
 }
 
 func promptChoice(title string, options []string) (string, error) {
@@ -87,6 +90,12 @@ func runPickerOnScreen(screen tcell.Screen, title string, entries []pickerEntry,
 }
 
 func runPickerOnScreenWithMessage(screen tcell.Screen, title, message string, entries []pickerEntry, searchable, costNote bool) (int, error) {
+	if message != "" {
+		_, height := screen.Size()
+		if height < 9 {
+			return -1, fmt.Errorf("terminal is too short to show the full commit message and choices; resize it to at least 9 rows")
+		}
+	}
 	state := pickerState{
 		entries:  entries,
 		search:   searchable,
@@ -127,6 +136,10 @@ func (s *pickerState) handleKey(event *tcell.EventKey) (bool, int) {
 		if len(filtered) > 0 {
 			return true, filtered[s.cursor].index
 		}
+	case tcell.KeyPgUp:
+		s.scrollMessage(-max(1, s.messageViewportRows-1))
+	case tcell.KeyPgDn:
+		s.scrollMessage(max(1, s.messageViewportRows-1))
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		if s.search && len(s.query) > 0 {
 			s.query = s.query[:len(s.query)-1]
@@ -139,6 +152,14 @@ func (s *pickerState) handleKey(event *tcell.EventKey) (bool, int) {
 		}
 	}
 	return false, -1
+}
+
+func (s *pickerState) scrollMessage(amount int) {
+	if s.message == "" || s.messageViewportRows == 0 {
+		return
+	}
+	maxScroll := max(0, s.messageLineCount-s.messageViewportRows)
+	s.messageScroll = min(maxScroll, max(0, s.messageScroll+amount))
 }
 
 type indexedEntry struct {
@@ -228,6 +249,13 @@ func (s *pickerState) render(screen tcell.Screen) {
 	selectedStyle := tcell.StyleDefault.Foreground(tcell.ColorBlack).Background(tcell.ColorWhite).Bold(true)
 	headerStyle := tcell.StyleDefault.Foreground(tcell.ColorAqua).Bold(true)
 	mutedStyle := tcell.StyleDefault.Foreground(tcell.ColorGray)
+	if s.message != "" && height < 9 {
+		putLine(screen, 0, 0, "Terminal too short to show message and choices.", width, headerStyle)
+		putLine(screen, 0, 1, "Resize to at least 9 rows to continue.", width, mutedStyle)
+		s.messageViewportRows = 0
+		screen.Show()
+		return
+	}
 
 	putLine(screen, 0, 0, s.title, width, headerStyle)
 	row := 1
@@ -242,14 +270,21 @@ func (s *pickerState) render(screen tcell.Screen) {
 		row++
 	}
 	if s.message != "" {
-		putLine(screen, 0, row, "Generated commit message:", width, headerStyle)
-		row++
+		filtered := s.filteredEntries()
 		messageLines := wrapText(s.message, width-2)
-		availableMessageRows := max(1, height-row-6)
-		if len(messageLines) > availableMessageRows {
-			messageLines = append(messageLines[:availableMessageRows-1], "…")
+		s.messageLineCount = len(messageLines)
+		optionRows := max(1, min(3, len(filtered)))
+		availableMessageRows := max(1, height-row-4-optionRows)
+		s.messageViewportRows = min(len(messageLines), availableMessageRows)
+		maxScroll := max(0, len(messageLines)-s.messageViewportRows)
+		s.messageScroll = min(maxScroll, max(0, s.messageScroll))
+		if maxScroll > 0 {
+			putLine(screen, 0, row, fmt.Sprintf("Generated commit message (lines %d-%d of %d):", s.messageScroll+1, s.messageScroll+s.messageViewportRows, len(messageLines)), width, headerStyle)
+		} else {
+			putLine(screen, 0, row, "Generated commit message:", width, headerStyle)
 		}
-		for _, line := range messageLines {
+		row++
+		for _, line := range messageLines[s.messageScroll : s.messageScroll+s.messageViewportRows] {
 			putLine(screen, 1, row, line, width-1, defaultStyle)
 			row++
 		}
@@ -259,7 +294,14 @@ func (s *pickerState) render(screen tcell.Screen) {
 	if s.search {
 		countText = fmt.Sprintf("%d models | Type to filter", len(filtered))
 	}
-	putLine(screen, 0, row, countText+" | ↑/↓ move | Enter select | Esc cancel", width, mutedStyle)
+	controls := countText + " | ↑/↓ move | Enter select | Esc cancel"
+	if s.message != "" {
+		controls = "↑/↓ choose | Enter select | Esc cancel"
+		if len(wrapText(s.message, width-2)) > s.messageViewportRows {
+			controls += " | PgUp/PgDn preview"
+		}
+	}
+	putLine(screen, 0, row, controls, width, mutedStyle)
 	row++
 
 	detailsHeight := 0
@@ -301,21 +343,27 @@ func wrapText(text string, width int) []string {
 	if width < 1 {
 		width = 1
 	}
-	words := strings.Fields(text)
-	if len(words) == 0 {
-		return []string{""}
-	}
-	lines := make([]string, 0, len(words))
-	line := words[0]
-	for _, word := range words[1:] {
-		if len([]rune(line))+1+len([]rune(word)) <= width {
-			line += " " + word
+	logicalLines := strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
+	lines := make([]string, 0, len(logicalLines))
+	for _, logicalLine := range logicalLines {
+		runes := []rune(logicalLine)
+		if len(runes) == 0 {
+			lines = append(lines, "")
 			continue
 		}
-		lines = append(lines, line)
-		line = word
+		for len(runes) > width {
+			breakAt := width
+			for i := width; i > 1; i-- {
+				if runes[i-1] == ' ' || runes[i-1] == '\t' {
+					breakAt = i
+					break
+				}
+			}
+			lines = append(lines, string(runes[:breakAt]))
+			runes = runes[breakAt:]
+		}
+		lines = append(lines, string(runes))
 	}
-	lines = append(lines, line)
 	return lines
 }
 
