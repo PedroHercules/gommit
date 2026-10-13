@@ -59,7 +59,7 @@ func TestPickerFiltersAndSelectsWithArrowKeys(t *testing.T) {
 	if selected != 1 {
 		t.Fatalf("selected entry index = %d, want 1", selected)
 	}
-	if content := screenContent(screen); !strings.Contains(content, "Search: free") || !strings.Contains(content, "Free models are recommended") || !strings.Contains(content, "Price: free") {
+	if content := screenContent(screen); !strings.Contains(content, "Search  free_") || !strings.Contains(content, "Free models are recommended") || !strings.Contains(content, "Price: free") {
 		t.Fatalf("picker should keep search at top and show cost notice, got: %s", content)
 	}
 }
@@ -252,7 +252,7 @@ func TestPrintModelsIncludesPricingAndCostNotice(t *testing.T) {
 	if err := printModels(&output, models); err != nil {
 		t.Fatalf("printModels() error = %v", err)
 	}
-	for _, expected := range []string{"does not control or limit costs", "Price: free", "Price: unknown", "prompt $0.001000, completion $0.002000"} {
+	for _, expected := range []string{"cannot cap charges", "Price: free", "Price: unknown", "prompt $0.001000, completion $0.002000"} {
 		if !strings.Contains(output.String(), expected) {
 			t.Errorf("printModels() output missing %q", expected)
 		}
@@ -267,7 +267,7 @@ func TestModelPickerLabelsMakePricingStatusVisible(t *testing.T) {
 	}{
 		{name: "free", model: repositories.LLMModel{ID: "provider/free", PricingAvailable: true, Free: true}, want: "[FREE]"},
 		{name: "paid", model: repositories.LLMModel{ID: "provider/paid", PricingAvailable: true}, want: "[PAID]"},
-		{name: "unknown", model: repositories.LLMModel{ID: "provider/unknown"}, want: "[PRICE UNKNOWN]"},
+		{name: "unknown", model: repositories.LLMModel{ID: "provider/unknown"}, want: "[PRICE?]"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
