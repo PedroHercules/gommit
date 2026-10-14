@@ -5,6 +5,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -22,6 +23,8 @@ type CLI struct {
 	configService      *config_services.ConfigService
 	prService          *pr_services.ServiceContainer
 	selectCommitAction func() (string, error)
+	updates            *updateManager
+	updateOutput       io.Writer
 }
 
 type commitCommandService interface {
@@ -43,12 +46,15 @@ func NewCLI(commitService *commit_services.CommitService, configService *config_
 		commitService: commitService,
 		configService: configService,
 		prService:     prService,
+		updates:       newUpdateManager(version),
+		updateOutput:  os.Stderr,
 	}
 }
 
 // Run executes the CLI with the provided arguments.
 // This is the main entry point for command processing.
 func (c *CLI) Run(args []string) error {
+	update := c.checkForUpdate()
 	if len(args) < 2 {
 		return c.handleCommit(nil)
 	}
@@ -63,6 +69,8 @@ func (c *CLI) Run(args []string) error {
 		return c.handleConfig(args[2:])
 	case "version":
 		return c.showVersion()
+	case "update":
+		return c.handleUpdate(update)
 	case "pr":
 		return c.handlePr(args[2:])
 	case "validate":
@@ -73,6 +81,39 @@ func (c *CLI) Run(args []string) error {
 		}
 		return fmt.Errorf("unknown command %q; run `gmit help` to see available commands", command)
 	}
+}
+
+func (c *CLI) checkForUpdate() updateNotice {
+	if c.updates == nil {
+		return updateNotice{}
+	}
+	notice, err := c.updates.check()
+	if err != nil {
+		return updateNotice{}
+	}
+	if notice.LatestVersion != "" && notice.ReleaseURL != "" {
+		notice.printTo(c.updateOutput)
+	}
+	return notice
+}
+
+func (c *CLI) handleUpdate(notice updateNotice) error {
+	if notice.LatestVersion != "" && notice.CurrentVersion != "" {
+		newer, err := isNewerVersion(notice.LatestVersion, notice.CurrentVersion)
+		if err == nil && !newer {
+			fmt.Printf("✓ Gmit is already up to date (v%s).\n", notice.CurrentVersion)
+			return nil
+		}
+	}
+	if c.updates == nil {
+		return fmt.Errorf("npm update is unavailable in this build")
+	}
+	fmt.Println("› Updating Gmit to the latest npm release...")
+	if err := c.updates.update(); err != nil {
+		return err
+	}
+	fmt.Println("✓ Gmit update completed. Run `gmit version` to verify the installed version.")
+	return nil
 }
 
 // handleCommit processes commit-related commands.

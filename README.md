@@ -30,6 +30,8 @@ gmit --dry-run
 
 See the sections below for requirements, all commands, provider billing details, and known limitations.
 
+Gmit checks npm for a newer stable version whenever you run a command. If one is available, it shows the installed and available versions, release highlights, and a link to the GitHub release notes. This check contacts the npm registry on each command and fetches release notes for a new version from GitHub, caching them locally; it does not send your repository data or provider credentials. The check has a short timeout and is skipped silently when the network is unavailable. Gmit never updates itself automatically. Release notes are generated and published with each automated release from the Conventional Commit history.
+
 ## Requirements
 
 - Git installed and available as `git` in your terminal.
@@ -151,7 +153,10 @@ For Grok OAuth, Gmit uses the official xAI Grok CLI and invokes its login flow. 
 gmit help
 gmit config help
 gmit version
+gmit update
 ```
+
+`gmit update` installs the latest release globally with npm. It requires npm and the same permissions used for the original global installation. Release highlights link to the automatically generated [GitHub release notes](https://github.com/PedroHercules/gommit/releases).
 
 Unknown commands and unsupported command options return an error. The old `--force` commit option is not supported.
 

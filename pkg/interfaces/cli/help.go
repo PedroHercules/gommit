@@ -17,6 +17,7 @@ COMMANDS
     validate <message>  Check a commit message
     config              Configure a provider, credentials, and model
     version             Show version
+    update              Update the npm installation to the latest release
     help                Show help
 
 COMMIT OPTIONS
@@ -50,6 +51,7 @@ EXAMPLES
     gmit commit --commit
     gmit pr --base-branch main --model provider/model-id
     gmit validate "feat: add user authentication"
+    gmit update
 
 QUICK NOTES
     › Commit generation uses staged changes only. Stage files with git add first.
@@ -58,6 +60,8 @@ QUICK NOTES
     ! OpenRouter and xAI control pricing and billing. Gmit cannot cap charges.
     › Prefer free models and verify current prices with your provider.
     › PR generation fetches origin/<base>; it does not switch branches or pull changes.
+    › Gmit checks npm for updates on every launch and shows release notes when available.
+    › ` + "`gmit update`" + ` installs the latest release using npm; it never updates automatically.
     › Run ` + "`gmit config help`" + ` for configuration details.
 
 Repository: https://github.com/PedroHercules/gommit`)
