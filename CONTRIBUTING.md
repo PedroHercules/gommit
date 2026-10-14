@@ -15,6 +15,7 @@ Thanks for helping improve Gmit. Issues and pull requests are reviewed by the ma
 - Do not push directly to `main`. Create a branch and open a pull request against `main`.
 - Keep each pull request focused. Link the related issue when one exists and explain the user-visible change.
 - Add or update tests when behavior changes. Run `gofmt` on changed Go files and `go test ./...` before submitting.
+- Use Conventional Commit titles such as `feat: add provider support` or `fix: handle empty responses`; semantic-release uses these messages to generate version numbers and GitHub release notes.
 - Never include credentials, API keys, personal data, or private repository contents in code, tests, screenshots, or logs.
 - Resolve review conversations and update the pull request when requested. The required checks and maintainer/code-owner approval must pass before merge.
 
