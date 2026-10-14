@@ -1,0 +1,29 @@
+name: Feature request
+description: Suggest an improvement or a new model provider.
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. For substantial changes, discuss the proposal and wait for maintainer feedback before starting implementation.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What are you trying to do that Gmit does not support well today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior
+      description: Describe the outcome you would expect, including provider/model details if relevant.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workaround or alternative approach you have considered.
+    validations:
+      required: false

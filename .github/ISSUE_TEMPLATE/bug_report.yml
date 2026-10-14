@@ -1,0 +1,46 @@
+name: Bug report
+description: Report a reproducible problem with Gmit.
+title: "[Bug]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Search existing issues first. Never include API keys, private diffs, or other sensitive data. For security vulnerabilities, use the private reporting link instead.
+  - type: input
+    id: version
+    attributes:
+      label: Gmit version
+      description: Run `gmit version`.
+      placeholder: 1.7.0
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Operating system and architecture
+      placeholder: Ubuntu 24.04, linux/amd64
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the command and the smallest reproducible example. Redact secrets and private data.
+      placeholder: |
+        1. Run ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior or sanitized error
+    validations:
+      required: true
