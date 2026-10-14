@@ -22,7 +22,6 @@ CONFIG.md
 *test*
 
 # Build artifacts
-*.exe
 *.o
 *.a
 *.so
