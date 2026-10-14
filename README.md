@@ -170,6 +170,8 @@ Gmit depends on provider APIs, model catalogs, authentication, network access, a
 
 PR generation requires a successful fetch and `origin/<base-branch>`. It compares code changes from the merge base to `HEAD`; it does not include unstaged working-tree edits. Commit generation analyzes staged changes only. The commit-message validator uses simple heuristics and may report false positives or miss repository-specific rules.
 
-## License and support
+## Contributing and support
 
-Gmit is released under the MIT License. Report bugs or request features in the [GitHub issue tracker](https://github.com/PedroHercules/gommit/issues).
+Contributions are welcome, but opening an issue or pull request does not guarantee that a change will be accepted. Read the [contribution guidelines](CONTRIBUTING.md) before proposing a change. Report bugs and suggest features through the [GitHub issue tracker](https://github.com/PedroHercules/gommit/issues). To report a security vulnerability, follow [SECURITY.md](SECURITY.md) and do not post exploit details in a public issue.
+
+Gmit is released under the MIT License.

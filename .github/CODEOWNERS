@@ -1,6 +1,2 @@
-# Require the repository owner to review changes to every file when code-owner
-# reviews are enabled in the repository's branch rules.
+# Route reviews for all changes to the repository owner.
 * @PedroHercules
-
-# Keep the ownership rule itself protected as well.
-/.github/CODEOWNERS @PedroHercules
