@@ -1,62 +1,62 @@
 {
-  "name": "gmit",
-  "version": "1.6.0",
-  "description": "AI-powered Git commit message and pull request description CLI with configurable LLM providers",
-  "main": "install.js",
-  "bin": {
-    "gmit": "./gmit.js"
-  },
-  "scripts": {
-    "postinstall": "node install.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [
-    "git",
-    "git-commit",
-    "commit-message",
-    "commit-message-generator",
-    "ai-commit",
-    "pull-request",
-    "pull-request-description",
-    "pr-description",
-    "conventional-commits",
-    "openrouter",
-    "grok",
-    "xai",
-    "cli",
-    "developer-tools",
-    "golang"
-  ],
-  "author": "PedroHercules",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/PedroHercules/gommit.git"
-  },
-  "bugs": {
-    "url": "https://github.com/PedroHercules/gommit/issues"
-  },
-  "homepage": "https://github.com/PedroHercules/gommit#readme",
-  "publishConfig": {
-    "registry": "https://registry.npmjs.org/"
-  },
-  "engines": {
-    "node": ">=12.0.0"
-  },
-  "os": [
-    "darwin",
-    "linux",
-    "win32"
-  ],
-  "cpu": [
-    "x64",
-    "arm64"
-  ],
-  "files": [
-    "bin/",
-    "install.js",
-    "README.md",
-    "LICENSE"
-  ],
-  "preferGlobal": true
+    "name": "gmit",
+    "version": "1.7.0",
+    "description": "AI-powered Git commit message and pull request generator using OpenRouter LLM models",
+    "main": "install.js",
+    "bin": {
+        "gmit": "./gmit.js"
+    },
+    "scripts": {
+        "postinstall": "node install.js",
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "keywords": [
+        "git",
+        "git-commit",
+        "commit-message",
+        "commit-message-generator",
+        "ai-commit",
+        "pull-request",
+        "pull-request-description",
+        "pr-description",
+        "conventional-commits",
+        "openrouter",
+        "grok",
+        "xai",
+        "cli",
+        "developer-tools",
+        "golang"
+    ],
+    "author": "PedroHercules",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/PedroHercules/gommit.git"
+    },
+    "bugs": {
+        "url": "https://github.com/PedroHercules/gommit/issues"
+    },
+    "homepage": "https://github.com/PedroHercules/gommit#readme",
+    "publishConfig": {
+        "registry": "https://registry.npmjs.org/"
+    },
+    "engines": {
+        "node": ">=12.0.0"
+    },
+    "os": [
+        "darwin",
+        "linux",
+        "win32"
+    ],
+    "cpu": [
+        "x64",
+        "arm64"
+    ],
+    "files": [
+        "bin/",
+        "install.js",
+        "README.md",
+        "LICENSE"
+    ],
+    "preferGlobal": true
 }
