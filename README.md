@@ -1,6 +1,34 @@
-# Gmit
+# Gmit — AI Git Commit Message & Pull Request CLI
 
-Gmit is a command-line tool that uses OpenRouter or xAI Grok to draft Git commit messages and pull request descriptions. It can also run a lightweight check on a commit message. You review generated text before committing unless you explicitly pass `--commit`.
+[![CI](https://github.com/PedroHercules/gommit/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/PedroHercules/gommit/actions/workflows/ci-cd.yml)
+[![npm version](https://img.shields.io/npm/v/gmit)](https://www.npmjs.com/package/gmit)
+[![License: MIT](https://img.shields.io/github/license/PedroHercules/gommit)](LICENSE)
+
+Gmit is a cross-platform **AI-powered Git CLI** that drafts commit messages from staged changes and pull request descriptions from branch diffs. Connect an available LLM provider, select a model, review the generated text, then commit or push from the terminal. Current providers include **OpenRouter** and **xAI Grok**. Gmit also includes a lightweight Conventional Commits style check.
+
+## Why Gmit
+
+- Generate Conventional Commits-style messages from staged Git changes.
+- Draft pull request descriptions from your branch changes.
+- Use OpenRouter or xAI Grok with interactive provider and model setup.
+- Review generated commit text before choosing to commit, push, or cancel.
+- Run on Windows, Linux, macOS, and WSL on supported x64 and ARM64 systems.
+
+Install the latest release from npm:
+
+```sh
+npm install --global gmit
+```
+
+Then configure a provider and generate a preview:
+
+```sh
+gmit config
+git add src/file.go
+gmit --dry-run
+```
+
+See the sections below for requirements, all commands, provider billing details, and known limitations.
 
 ## Requirements
 

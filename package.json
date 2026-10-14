@@ -1,7 +1,7 @@
 {
   "name": "gmit",
   "version": "1.6.0",
-  "description": "AI-powered Git commit message and pull request generator using OpenRouter LLM models",
+  "description": "AI-powered Git commit message and pull request description CLI with configurable LLM providers",
   "main": "install.js",
   "bin": {
     "gmit": "./gmit.js"
@@ -12,17 +12,20 @@
   },
   "keywords": [
     "git",
-    "commit",
+    "git-commit",
+    "commit-message",
+    "commit-message-generator",
+    "ai-commit",
     "pull-request",
-    "pr",
-    "ai",
-    "llm",
+    "pull-request-description",
+    "pr-description",
     "conventional-commits",
     "openrouter",
     "grok",
     "xai",
     "cli",
-    "automation"
+    "developer-tools",
+    "golang"
   ],
   "author": "PedroHercules",
   "license": "MIT",
