@@ -90,27 +90,33 @@ type prPreviewState struct {
 	displayLines []string
 	scroll       int
 	viewport     int
+	cursor       int
 }
 
-func reviewPRPreview(markdown string) (bool, error) {
+func reviewPRPreview(markdown string, defaultCreate bool) (string, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {
-		return false, fmt.Errorf("could not open the PR preview: %w", err)
+		return "", fmt.Errorf("could not open the PR preview: %w", err)
 	}
 	if err := screen.Init(); err != nil {
-		return false, fmt.Errorf("could not open the PR preview: %w", err)
+		return "", fmt.Errorf("could not open the PR preview: %w", err)
 	}
 	defer screen.Fini()
 	screen.EnablePaste()
-	return reviewPRPreviewOnScreen(screen, markdown)
+	return reviewPRPreviewOnScreen(screen, markdown, defaultCreate)
 }
 
-func reviewPRPreviewOnScreen(screen tcell.Screen, markdown string) (bool, error) {
+func reviewPRPreviewOnScreen(screen tcell.Screen, markdown string, defaultCreate bool) (string, error) {
 	_, height := screen.Size()
-	if height < 5 {
-		return false, fmt.Errorf("terminal is too short to review the PR; resize it to at least 5 rows")
+	if height < 7 {
+		return "", fmt.Errorf("terminal is too short to review the PR; resize it to at least 7 rows")
 	}
 	state := prPreviewState{lines: strings.Split(markdown, "\n")}
+	if defaultCreate {
+		state.cursor = 0
+	} else {
+		state.cursor = 1
+	}
 	state.render(screen)
 	for {
 		switch event := screen.PollEvent().(type) {
@@ -118,20 +124,25 @@ func reviewPRPreviewOnScreen(screen tcell.Screen, markdown string) (bool, error)
 			screen.Sync()
 			state.render(screen)
 		case *tcell.EventKey:
-			if done, proceed := state.handleKey(event); done {
-				return proceed, nil
+			if done, action := state.handleKey(event); done {
+				return action, nil
 			}
 			state.render(screen)
 		}
 	}
 }
 
-func (s *prPreviewState) handleKey(event *tcell.EventKey) (bool, bool) {
+func (s *prPreviewState) handleKey(event *tcell.EventKey) (bool, string) {
 	switch event.Key() {
 	case tcell.KeyEnter:
-		return true, true
+		if s.cursor == 0 {
+			return true, createPRAction
+		}
+		return true, previewOnlyAction
 	case tcell.KeyEscape, tcell.KeyCtrlC:
-		return true, false
+		return true, ""
+	case tcell.KeyLeft, tcell.KeyRight, tcell.KeyTab:
+		s.cursor = 1 - s.cursor
 	case tcell.KeyPgUp:
 		s.scrollBy(-max(1, s.viewport-1))
 	case tcell.KeyPgDn:
@@ -145,7 +156,7 @@ func (s *prPreviewState) handleKey(event *tcell.EventKey) (bool, bool) {
 	case tcell.KeyEnd:
 		s.scroll = max(0, len(s.displayLines)-s.viewport)
 	}
-	return false, false
+	return false, ""
 }
 
 func (s *prPreviewState) scrollBy(amount int) {
@@ -163,19 +174,30 @@ func (s *prPreviewState) render(screen tcell.Screen) {
 	header := style.Foreground(tcell.ColorAqua).Bold(true)
 	muted := style.Foreground(tcell.ColorGray)
 	s.displayLines = wrapText(strings.Join(s.lines, "\n"), max(1, width-2))
-	s.viewport = max(1, height-2)
+	s.viewport = max(1, height-4)
 	s.scroll = min(max(0, len(s.displayLines)-s.viewport), max(0, s.scroll))
 	visibleEnd := min(len(s.displayLines), s.scroll+s.viewport)
 	putLine(screen, 0, 0, fmt.Sprintf("Pull request preview · lines %d-%d of %d", s.scroll+1, visibleEnd, len(s.displayLines)), width, header)
 	for index, line := range s.displayLines[s.scroll:visibleEnd] {
 		putLine(screen, 0, index+1, line, width, style)
 	}
-	controls := "↑/↓ scroll · PgUp/PgDn page · Home/End jump · Enter continue · Esc cancel"
+	selectedStyle := style.Foreground(tcell.ColorBlack).Background(tcell.ColorAqua).Bold(true)
+	actionStyle := style.Foreground(tcell.ColorAqua)
+	for index, action := range []string{createPRAction, previewOnlyAction} {
+		actionLine := "  " + action
+		lineStyle := actionStyle
+		if index == s.cursor {
+			actionLine = "> " + action
+			lineStyle = selectedStyle
+		}
+		putLine(screen, 0, height-3+index, actionLine, width, lineStyle)
+	}
+	controls := "↑/↓ scroll · PgUp/PgDn page · Home/End jump · ←/→ actions · Enter select · Esc cancel"
 	if width < 80 {
-		controls = "↑↓/PgUp/Dn scroll · Home/End · Enter next · Esc cancel"
+		controls = "↑↓ scroll · PgUp/Dn page · Home/End · ←→ actions · Enter select · Esc cancel"
 	}
 	if width < 52 {
-		controls = "PgUp/Dn scroll · Enter next · Esc cancel"
+		controls = "↑↓/PgUp/Dn scroll · ←→ actions · Enter select · Esc cancel"
 	}
 	putLine(screen, 0, height-1, controls, width, muted)
 	screen.Show()

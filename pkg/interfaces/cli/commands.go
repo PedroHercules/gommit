@@ -23,7 +23,6 @@ type CLI struct {
 	configService      *config_services.ConfigService
 	prService          *pr_services.ServiceContainer
 	selectCommitAction func() (string, error)
-	selectPRAction     func(string) (string, error)
 	selectPRDraft      func() (bool, error)
 	selectPRReviewers  func([]string, []string) (reviewerPickerResult, error)
 	confirmGitHubLogin func() (bool, error)
@@ -274,29 +273,22 @@ func (c *CLI) handlePr(args []string) error {
 	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 	create := options.create
 	if interactive {
-		proceed, previewErr := reviewPRPreview(resp.PullRequest.Body)
+		action, previewErr := reviewPRPreview(resp.PullRequest.Body, options.create)
 		if previewErr != nil {
 			return previewErr
 		}
 		fmt.Printf("\nPull request preview\n%s\n", resp.PullRequest.Body)
-		if !proceed {
-			fmt.Println("› PR preview closed. No pull request was created.")
+		if action == "" {
+			fmt.Println("› PR preview cancelled. No pull request was created.")
 			return nil
 		}
-	} else {
-		fmt.Printf("\nPull request preview\n%s\n", resp.PullRequest.Body)
-	}
-
-	if !options.create && interactive {
-		choice, choiceErr := c.choosePRAction("")
-		if choiceErr != nil {
-			return choiceErr
-		}
-		if choice != createPRAction {
+		if action == previewOnlyAction {
 			fmt.Println("› Keeping preview only. No pull request was created.")
 			return nil
 		}
-		create = true
+		create = action == createPRAction
+	} else {
+		fmt.Printf("\nPull request preview\n%s\n", resp.PullRequest.Body)
 	}
 	if !create {
 		return nil
@@ -406,13 +398,6 @@ func parsePRArgs(args []string) (prCommandOptions, error) {
 		}
 	}
 	return options, nil
-}
-
-func (c *CLI) choosePRAction(message string) (string, error) {
-	if c.selectPRAction != nil {
-		return c.selectPRAction(message)
-	}
-	return promptChoiceWithMessage("What would you like to do?", message, []string{createPRAction, previewOnlyAction})
 }
 
 func (c *CLI) promptForPRReviewers(client githubPRClient) ([]string, error) {

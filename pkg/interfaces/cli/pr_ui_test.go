@@ -16,12 +16,12 @@ func TestPRPreviewViewerScrollsThroughEntireDescription(t *testing.T) {
 	}
 	screen.InjectKey(tcell.KeyEnd, 0, 0)
 	screen.InjectKey(tcell.KeyEnter, 0, 0)
-	proceed, err := reviewPRPreviewOnScreen(screen, strings.Join(lines, "\n"))
-	if err != nil || !proceed {
-		t.Fatalf("reviewPRPreviewOnScreen() = %t, %v", proceed, err)
+	action, err := reviewPRPreviewOnScreen(screen, strings.Join(lines, "\n"), true)
+	if err != nil || action != createPRAction {
+		t.Fatalf("reviewPRPreviewOnScreen() = %q, %v", action, err)
 	}
 	content := screenContent(screen)
-	for _, expected := range []string{"Pull request preview · lines 21-30 of 30", "preview-detail-29", "Enter continue", "Esc cancel"} {
+	for _, expected := range []string{"Pull request preview · lines 23-30 of 30", "preview-detail-29", createPRAction, previewOnlyAction, "scroll", "←/→ actions", "Enter select", "Esc cancel"} {
 		if !strings.Contains(content, expected) {
 			t.Errorf("review screen missing %q: %s", expected, content)
 		}
@@ -34,19 +34,19 @@ func TestPRPreviewViewerCanReturnToBeginningOrCancel(t *testing.T) {
 	screen.InjectKey(tcell.KeyEnd, 0, 0)
 	screen.InjectKey(tcell.KeyHome, 0, 0)
 	screen.InjectKey(tcell.KeyEnter, 0, 0)
-	proceed, err := reviewPRPreviewOnScreen(screen, text)
-	if err != nil || !proceed {
-		t.Fatalf("reviewPRPreviewOnScreen() = %t, %v", proceed, err)
+	action, err := reviewPRPreviewOnScreen(screen, text, false)
+	if err != nil || action != previewOnlyAction {
+		t.Fatalf("reviewPRPreviewOnScreen() = %q, %v", action, err)
 	}
-	if content := screenContent(screen); !strings.Contains(content, "Pull request preview · lines 1-5 of 6") || !strings.Contains(content, "first detail") {
+	if content := screenContent(screen); !strings.Contains(content, "Pull request preview · lines 1-3 of 6") || !strings.Contains(content, "first detail") || !strings.Contains(content, createPRAction) || !strings.Contains(content, previewOnlyAction) {
 		t.Fatalf("Home did not return to the beginning of the preview: %s", content)
 	}
 
 	cancelScreen := newTestPickerScreen(t, 48, 7)
 	cancelScreen.InjectKey(tcell.KeyEscape, 0, 0)
-	proceed, err = reviewPRPreviewOnScreen(cancelScreen, text)
-	if err != nil || proceed {
-		t.Fatalf("Escape result = proceed %t, error %v", proceed, err)
+	action, err = reviewPRPreviewOnScreen(cancelScreen, text, false)
+	if err != nil || action != "" {
+		t.Fatalf("Escape result = action %q, error %v", action, err)
 	}
 }
 
