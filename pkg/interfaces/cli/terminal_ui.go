@@ -85,6 +85,307 @@ func runInteractivePickerWithMessage(title, message string, entries []pickerEntr
 	return runPickerOnScreenWithMessage(screen, title, message, entries, searchable, costNote)
 }
 
+type prPreviewState struct {
+	lines        []string
+	displayLines []string
+	scroll       int
+	viewport     int
+}
+
+func reviewPRPreview(markdown string) (bool, error) {
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		return false, fmt.Errorf("could not open the PR preview: %w", err)
+	}
+	if err := screen.Init(); err != nil {
+		return false, fmt.Errorf("could not open the PR preview: %w", err)
+	}
+	defer screen.Fini()
+	screen.EnablePaste()
+	return reviewPRPreviewOnScreen(screen, markdown)
+}
+
+func reviewPRPreviewOnScreen(screen tcell.Screen, markdown string) (bool, error) {
+	_, height := screen.Size()
+	if height < 5 {
+		return false, fmt.Errorf("terminal is too short to review the PR; resize it to at least 5 rows")
+	}
+	state := prPreviewState{lines: strings.Split(markdown, "\n")}
+	state.render(screen)
+	for {
+		switch event := screen.PollEvent().(type) {
+		case *tcell.EventResize:
+			screen.Sync()
+			state.render(screen)
+		case *tcell.EventKey:
+			if done, proceed := state.handleKey(event); done {
+				return proceed, nil
+			}
+			state.render(screen)
+		}
+	}
+}
+
+func (s *prPreviewState) handleKey(event *tcell.EventKey) (bool, bool) {
+	switch event.Key() {
+	case tcell.KeyEnter:
+		return true, true
+	case tcell.KeyEscape, tcell.KeyCtrlC:
+		return true, false
+	case tcell.KeyPgUp:
+		s.scrollBy(-max(1, s.viewport-1))
+	case tcell.KeyPgDn:
+		s.scrollBy(max(1, s.viewport-1))
+	case tcell.KeyUp:
+		s.scrollBy(-1)
+	case tcell.KeyDown:
+		s.scrollBy(1)
+	case tcell.KeyHome:
+		s.scroll = 0
+	case tcell.KeyEnd:
+		s.scroll = max(0, len(s.displayLines)-s.viewport)
+	}
+	return false, false
+}
+
+func (s *prPreviewState) scrollBy(amount int) {
+	s.scroll = min(max(0, len(s.displayLines)-s.viewport), max(0, s.scroll+amount))
+}
+
+func (s *prPreviewState) render(screen tcell.Screen) {
+	width, height := screen.Size()
+	screen.Clear()
+	if width <= 0 || height <= 0 {
+		screen.Show()
+		return
+	}
+	style := tcell.StyleDefault
+	header := style.Foreground(tcell.ColorAqua).Bold(true)
+	muted := style.Foreground(tcell.ColorGray)
+	s.displayLines = wrapText(strings.Join(s.lines, "\n"), max(1, width-2))
+	s.viewport = max(1, height-2)
+	s.scroll = min(max(0, len(s.displayLines)-s.viewport), max(0, s.scroll))
+	visibleEnd := min(len(s.displayLines), s.scroll+s.viewport)
+	putLine(screen, 0, 0, fmt.Sprintf("Pull request preview · lines %d-%d of %d", s.scroll+1, visibleEnd, len(s.displayLines)), width, header)
+	for index, line := range s.displayLines[s.scroll:visibleEnd] {
+		putLine(screen, 0, index+1, line, width, style)
+	}
+	controls := "↑/↓ scroll · PgUp/PgDn page · Home/End jump · Enter continue · Esc cancel"
+	if width < 80 {
+		controls = "↑↓/PgUp/Dn scroll · Home/End · Enter next · Esc cancel"
+	}
+	if width < 52 {
+		controls = "PgUp/Dn scroll · Enter next · Esc cancel"
+	}
+	putLine(screen, 0, height-1, controls, width, muted)
+	screen.Show()
+}
+
+type reviewerPickerResult struct {
+	Reviewers []string
+	AddManual bool
+	Cancelled bool
+}
+
+type reviewerPickerState struct {
+	reviewers []string
+	query     []rune
+	cursor    int
+	selected  map[string]string
+	initial   map[string]string
+	viewport  int
+}
+
+func pickPRReviewers(reviewers, selected []string) (reviewerPickerResult, error) {
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		return reviewerPickerResult{}, fmt.Errorf("could not open the reviewer selector: %w", err)
+	}
+	if err := screen.Init(); err != nil {
+		return reviewerPickerResult{}, fmt.Errorf("could not open the reviewer selector: %w", err)
+	}
+	defer screen.Fini()
+	screen.EnablePaste()
+	return pickPRReviewersOnScreen(screen, reviewers, selected)
+}
+
+func pickPRReviewersOnScreen(screen tcell.Screen, reviewers, selected []string) (reviewerPickerResult, error) {
+	_, height := screen.Size()
+	if height < 7 {
+		return reviewerPickerResult{}, fmt.Errorf("terminal is too short for reviewer selection; resize it to at least 7 rows")
+	}
+	state := reviewerPickerState{reviewers: uniqueReviewerLogins(reviewers), selected: reviewerMap(selected)}
+	state.initial = reviewerMap(selected)
+	state.render(screen)
+	for {
+		switch event := screen.PollEvent().(type) {
+		case *tcell.EventResize:
+			screen.Sync()
+			state.render(screen)
+		case *tcell.EventKey:
+			result, done := state.handleKey(event)
+			if done {
+				return result, nil
+			}
+			state.render(screen)
+		}
+	}
+}
+
+func (s *reviewerPickerState) filteredReviewers() []string {
+	query := strings.TrimSpace(string(s.query))
+	filtered := make([]indexedReviewer, 0, len(s.reviewers))
+	for _, login := range s.reviewers {
+		score, matches := fuzzyScore(query, login)
+		if matches {
+			filtered = append(filtered, indexedReviewer{login: login, score: score})
+		}
+	}
+	if query != "" {
+		sort.SliceStable(filtered, func(i, j int) bool { return filtered[i].score < filtered[j].score })
+	}
+	logins := make([]string, len(filtered))
+	for index, item := range filtered {
+		logins[index] = item.login
+	}
+	return logins
+}
+
+type indexedReviewer struct {
+	login string
+	score int
+}
+
+func (s *reviewerPickerState) handleKey(event *tcell.EventKey) (reviewerPickerResult, bool) {
+	filtered := s.filteredReviewers()
+	maxCursor := len(filtered) + 1
+	if s.cursor > maxCursor {
+		s.cursor = maxCursor
+	}
+	switch event.Key() {
+	case tcell.KeyEscape, tcell.KeyCtrlC:
+		return reviewerPickerResult{Reviewers: reviewerMapValues(s.initial), Cancelled: true}, true
+	case tcell.KeyUp:
+		if s.cursor > 0 {
+			s.cursor--
+		}
+	case tcell.KeyDown:
+		if s.cursor < maxCursor {
+			s.cursor++
+		}
+	case tcell.KeyRune:
+		if event.Rune() == ' ' {
+			if s.cursor < len(filtered) {
+				s.toggle(filtered[s.cursor])
+			}
+		} else if !unicode.IsControl(event.Rune()) {
+			s.query = append(s.query, event.Rune())
+			s.cursor = 0
+		}
+	case tcell.KeyBackspace, tcell.KeyBackspace2:
+		if len(s.query) > 0 {
+			s.query = s.query[:len(s.query)-1]
+			s.cursor = 0
+		}
+	case tcell.KeyEnter:
+		switch s.cursor {
+		case len(filtered):
+			return reviewerPickerResult{Reviewers: reviewerMapValues(s.selected), AddManual: true}, true
+		case len(filtered) + 1:
+			return reviewerPickerResult{Reviewers: reviewerMapValues(s.selected)}, true
+		default:
+			if len(filtered) > 0 {
+				s.toggle(filtered[s.cursor])
+			}
+		}
+	}
+	return reviewerPickerResult{}, false
+}
+
+func (s *reviewerPickerState) toggle(login string) {
+	key := strings.ToLower(login)
+	if _, exists := s.selected[key]; exists {
+		delete(s.selected, key)
+	} else {
+		s.selected[key] = login
+	}
+}
+
+func (s *reviewerPickerState) render(screen tcell.Screen) {
+	width, height := screen.Size()
+	screen.Clear()
+	if width <= 0 || height <= 0 {
+		screen.Show()
+		return
+	}
+	style := tcell.StyleDefault
+	selectedStyle := style.Foreground(tcell.ColorBlack).Background(tcell.ColorWhite).Bold(true)
+	header := style.Foreground(tcell.ColorAqua).Bold(true)
+	muted := style.Foreground(tcell.ColorGray)
+	filtered := s.filteredReviewers()
+	putLine(screen, 0, 0, fmt.Sprintf("Select reviewers · %d selected", len(s.selected)), width, header)
+	putLine(screen, 0, 1, "Search  "+string(s.query)+"_", width, style.Bold(true))
+	putLine(screen, 0, 2, "↑/↓ move · type to filter · Space/Enter toggle · Esc skip", width, muted)
+	listStart := 3
+	actionStart := height - 3
+	s.viewport = max(1, actionStart-listStart)
+	start := 0
+	if s.cursor < len(filtered) && s.cursor >= s.viewport {
+		start = s.cursor - s.viewport + 1
+	}
+	for row := 0; row < s.viewport && start+row < len(filtered); row++ {
+		index := start + row
+		login := filtered[index]
+		marker, lineStyle := "[ ] ", style
+		if _, exists := s.selected[strings.ToLower(login)]; exists {
+			marker = "[x] "
+		}
+		if index == s.cursor {
+			lineStyle = selectedStyle
+		}
+		putLine(screen, 0, listStart+row, marker+login, width, lineStyle)
+	}
+	if len(filtered) == 0 {
+		putLine(screen, 2, listStart, "No matching collaborators · use manual entry below", width-2, muted)
+	}
+	manualRow, doneRow := len(filtered), len(filtered)+1
+	manualStyle, doneStyle := style, style
+	if s.cursor == manualRow {
+		manualStyle = selectedStyle
+	}
+	if s.cursor == doneRow {
+		doneStyle = selectedStyle
+	}
+	putLine(screen, 0, actionStart, "+ Add username or team manually", width, manualStyle)
+	putLine(screen, 0, actionStart+1, fmt.Sprintf("✓ Done · %d selected", len(s.selected)), width, doneStyle)
+	putLine(screen, 0, height-1, "Enter choose · Esc keep current selection", width, muted)
+	screen.Show()
+}
+
+func reviewerMap(logins []string) map[string]string {
+	selected := make(map[string]string, len(logins))
+	for _, login := range logins {
+		login = strings.TrimSpace(login)
+		if login != "" {
+			selected[strings.ToLower(login)] = login
+		}
+	}
+	return selected
+}
+
+func reviewerMapValues(values map[string]string) []string {
+	result := make([]string, 0, len(values))
+	for _, login := range values {
+		result = append(result, login)
+	}
+	sort.Slice(result, func(i, j int) bool { return strings.ToLower(result[i]) < strings.ToLower(result[j]) })
+	return result
+}
+
+func uniqueReviewerLogins(logins []string) []string {
+	return reviewerMapValues(reviewerMap(logins))
+}
+
 func runPickerOnScreen(screen tcell.Screen, title string, entries []pickerEntry, searchable, costNote bool) (int, error) {
 	return runPickerOnScreenWithMessage(screen, title, "", entries, searchable, costNote)
 }

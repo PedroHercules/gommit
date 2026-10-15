@@ -64,6 +64,26 @@ func TestCommandGitHubPRClientReadsRemoteHead(t *testing.T) {
 	}
 }
 
+func TestCommandGitHubPRClientListsCollaboratorsWithPagination(t *testing.T) {
+	client := &commandGitHubPRClient{command: func(binary string, interactive bool, stdin string, args ...string) (string, error) {
+		if binary != "gh" || interactive || stdin != "" {
+			t.Fatalf("unexpected command invocation: binary=%s interactive=%t stdin=%q", binary, interactive, stdin)
+		}
+		want := []string{"api", "repos/{owner}/{repo}/collaborators?per_page=100", "--paginate", "--jq", ".[].login"}
+		if !reflect.DeepEqual(args, want) {
+			t.Fatalf("ListReviewers() args = %q, want %q", args, want)
+		}
+		return "zoe\nalice\nzoe\n", nil
+	}}
+	got, err := client.ListReviewers()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, []string{"alice", "zoe"}) {
+		t.Fatalf("ListReviewers() = %#v", got)
+	}
+}
+
 func TestRunPRCommandIncludesCommandOutputInError(t *testing.T) {
 	if _, err := exec.LookPath("sh"); err != nil {
 		t.Skip("shell-based command output test requires sh")

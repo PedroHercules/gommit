@@ -96,6 +96,8 @@ type fakeGitHubPRClient struct {
 	localHead     string
 	remoteHead    string
 	remoteErr     error
+	reviewers     []string
+	listErr       error
 	pushErr       error
 	createErr     error
 	loginCalls    int
@@ -116,6 +118,7 @@ func (f *fakeGitHubPRClient) Login() error {
 func (f *fakeGitHubPRClient) CurrentBranch() (string, error)    { return f.branch, nil }
 func (f *fakeGitHubPRClient) LocalHead() (string, error)        { return f.localHead, nil }
 func (f *fakeGitHubPRClient) RemoteHead(string) (string, error) { return f.remoteHead, f.remoteErr }
+func (f *fakeGitHubPRClient) ListReviewers() ([]string, error)  { return f.reviewers, f.listErr }
 func (f *fakeGitHubPRClient) PushBranch(string) error {
 	f.pushCalls++
 	if f.pushErr == nil {
@@ -186,6 +189,22 @@ func TestCreateGitHubPullRequestNonInteractiveRequiresPrePushedBranch(t *testing
 	}
 	if client.pushCalls != 0 || client.createCall != nil {
 		t.Fatalf("pushes=%d create=%+v", client.pushCalls, client.createCall)
+	}
+}
+
+func TestPromptForPRReviewersFallsBackToManualSelection(t *testing.T) {
+	client := &fakeGitHubPRClient{listErr: os.ErrPermission}
+	var pickerReceived []string
+	cli := &CLI{selectPRReviewers: func(candidates, _ []string) (reviewerPickerResult, error) {
+		pickerReceived = candidates
+		return reviewerPickerResult{Reviewers: []string{"team/reviewers"}}, nil
+	}}
+	got, err := cli.promptForPRReviewers(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pickerReceived) != 0 || strings.Join(got, ",") != "team/reviewers" {
+		t.Fatalf("manual fallback candidates=%q reviewers=%q", pickerReceived, got)
 	}
 }
 

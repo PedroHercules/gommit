@@ -23,6 +23,7 @@ type githubPRClient interface {
 	CurrentBranch() (string, error)
 	LocalHead() (string, error)
 	RemoteHead(branch string) (string, error)
+	ListReviewers() ([]string, error)
 	PushBranch(branch string) error
 	Create(options githubPRCreateOptions, branch string) (string, error)
 }
@@ -74,6 +75,14 @@ func (c *commandGitHubPRClient) RemoteHead(branch string) (string, error) {
 		return "", nil
 	}
 	return fields[0], nil
+}
+
+func (c *commandGitHubPRClient) ListReviewers() ([]string, error) {
+	output, err := c.command("gh", false, "", "api", "repos/{owner}/{repo}/collaborators?per_page=100", "--paginate", "--jq", ".[].login")
+	if err != nil {
+		return nil, err
+	}
+	return uniqueReviewerLogins(strings.Fields(output)), nil
 }
 
 func (c *commandGitHubPRClient) PushBranch(branch string) error {

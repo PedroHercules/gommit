@@ -108,7 +108,7 @@ Options:
 
 ### `gmit pr`
 
-Generates a Markdown pull request description from the code diff between your current `HEAD` and the merge base with a remote-tracking branch. By default it fetches `origin` and compares against `origin/main`. In an interactive terminal, Gmit displays the full preview and lets you create a GitHub PR or keep the preview only. Use `--create` to request creation directly.
+Generates a Markdown pull request description from the code diff between your current `HEAD` and the merge base with a remote-tracking branch. By default it fetches `origin` and compares against `origin/main`. In an interactive terminal, Gmit opens a full-screen preview that you can scroll through with Up/Down, Page Up/Page Down, or jump with Home/End before choosing to create a GitHub PR or keep the preview only. Press Enter to continue or Esc to cancel. Use `--create` to request creation directly.
 
 ```sh
 gmit pr
@@ -128,6 +128,8 @@ Options:
 - `--draft` creates the PR as a draft. Without it, non-interactive creation creates a PR ready for review.
 
 Creating a PR requires the official GitHub CLI (`gh`) installed and authenticated. If it is missing, Gmit prints the [official installation guide](https://github.com/cli/cli#installation); installation methods vary by operating system. If `gh` is installed but not authenticated, Gmit offers to start `gh auth login` in an interactive terminal. You can also run `gh auth login` yourself.
+
+When creating interactively, Gmit loads repository collaborators into a searchable, multi-select list. Use the arrow keys to navigate, type to filter, Space or Enter to toggle a reviewer, then choose **Done**. The **Add username or team manually** option accepts GitHub logins and team slugs separated by commas. Loading collaborators requires GitHub API access for the repository; if GitHub denies the request or returns no users, Gmit explains that and keeps manual entry available. The [GitHub collaborators endpoint](https://docs.github.com/en/rest/collaborators/collaborators) requires sufficient repository access, and classic tokens may need `repo` and `read:org` scopes.
 
 If the current branch is not published at the same commit on `origin`, Gmit asks before running `git push --set-upstream origin <branch>`. In non-interactive use, publish the branch yourself and rerun the command. Gmit does not force-push. If `origin` or the named base branch is unavailable, it stops with an error instead of generating a description from incomplete data. It fetches from `origin`, but does not checkout branches or pull into your current branch.
 

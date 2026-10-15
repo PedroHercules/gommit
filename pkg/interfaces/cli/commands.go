@@ -25,7 +25,7 @@ type CLI struct {
 	selectCommitAction func() (string, error)
 	selectPRAction     func(string) (string, error)
 	selectPRDraft      func() (bool, error)
-	readPRReviewers    func() ([]string, error)
+	selectPRReviewers  func([]string, []string) (reviewerPickerResult, error)
 	confirmGitHubLogin func() (bool, error)
 	confirmPRPush      func(string) (bool, error)
 	githubPR           githubPRClient
@@ -271,11 +271,24 @@ func (c *CLI) handlePr(args []string) error {
 	if resp == nil || resp.PullRequest == nil {
 		return fmt.Errorf("PR description generation returned no pull request content")
 	}
-	fmt.Printf("\nPull request preview\n%s\n", resp.PullRequest.Body)
-
+	interactive := term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))
 	create := options.create
-	if !options.create && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
-		choice, choiceErr := c.choosePRAction(resp.PullRequest.Body)
+	if interactive {
+		proceed, previewErr := reviewPRPreview(resp.PullRequest.Body)
+		if previewErr != nil {
+			return previewErr
+		}
+		fmt.Printf("\nPull request preview\n%s\n", resp.PullRequest.Body)
+		if !proceed {
+			fmt.Println("› PR preview closed. No pull request was created.")
+			return nil
+		}
+	} else {
+		fmt.Printf("\nPull request preview\n%s\n", resp.PullRequest.Body)
+	}
+
+	if !options.create && interactive {
+		choice, choiceErr := c.choosePRAction("")
 		if choiceErr != nil {
 			return choiceErr
 		}
@@ -304,8 +317,13 @@ func (c *CLI) handlePr(args []string) error {
 	}
 
 	reviewers := options.reviewers
-	if !options.reviewersSet && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
-		reviewers, err = c.promptForPRReviewers()
+	var githubClient githubPRClient
+	if !options.reviewersSet && interactive {
+		githubClient, err = c.ensureGitHubPRReady()
+		if err != nil {
+			return err
+		}
+		reviewers, err = c.promptForPRReviewers(githubClient)
 		if err != nil {
 			return err
 		}
@@ -318,13 +336,17 @@ func (c *CLI) handlePr(args []string) error {
 		}
 	}
 
-	return c.createGitHubPullRequest(githubPRCreateOptions{
+	createOptions := githubPRCreateOptions{
 		BaseBranch: options.baseBranch,
 		Title:      strings.TrimSpace(title),
 		Body:       strings.TrimSpace(body),
 		Reviewers:  reviewers,
 		Draft:      draft,
-	})
+	}
+	if githubClient != nil {
+		return c.createGitHubPullRequestWithClient(githubClient, createOptions)
+	}
+	return c.createGitHubPullRequest(createOptions)
 }
 
 type prCommandOptions struct {
@@ -393,21 +415,51 @@ func (c *CLI) choosePRAction(message string) (string, error) {
 	return promptChoiceWithMessage("What would you like to do?", message, []string{createPRAction, previewOnlyAction})
 }
 
-func (c *CLI) promptForPRReviewers() ([]string, error) {
-	if c.readPRReviewers != nil {
-		return c.readPRReviewers()
+func (c *CLI) promptForPRReviewers(client githubPRClient) ([]string, error) {
+	candidates, listErr := client.ListReviewers()
+	if listErr != nil {
+		fmt.Printf("! Could not load GitHub collaborators: %v\n", listErr)
+		fmt.Println("› You can still enter GitHub usernames or team slugs manually.")
+	} else if len(candidates) == 0 {
+		fmt.Println("› No collaborators were returned; you can add usernames or teams manually.")
 	}
-	value, err := promptLine("Reviewers (GitHub usernames or teams, comma-separated; Enter to skip): ")
-	if err != nil {
-		return nil, err
+	selected := []string{}
+	for {
+		var result reviewerPickerResult
+		var err error
+		if c.selectPRReviewers != nil {
+			result, err = c.selectPRReviewers(candidates, selected)
+		} else {
+			result, err = pickPRReviewers(candidates, selected)
+		}
+		if err != nil {
+			return nil, err
+		}
+		selected = result.Reviewers
+		if result.Cancelled || !result.AddManual {
+			return selected, nil
+		}
+		value, err := promptLine("GitHub usernames or team slugs (comma-separated; Enter to return): ")
+		if err != nil {
+			return nil, err
+		}
+		manual := parseReviewerLogins(value)
+		if len(manual) == 0 {
+			continue
+		}
+		selected = uniqueReviewerLogins(append(selected, manual...))
+		candidates = uniqueReviewerLogins(append(candidates, manual...))
 	}
+}
+
+func parseReviewerLogins(value string) []string {
 	var reviewers []string
 	for _, reviewer := range strings.Split(value, ",") {
 		if reviewer = strings.TrimSpace(reviewer); reviewer != "" {
 			reviewers = append(reviewers, reviewer)
 		}
 	}
-	return reviewers, nil
+	return uniqueReviewerLogins(reviewers)
 }
 
 func (c *CLI) choosePRDraft() (bool, error) {
@@ -446,6 +498,14 @@ func splitPRTitleAndBody(markdown, override string) (string, string) {
 }
 
 func (c *CLI) createGitHubPullRequest(options githubPRCreateOptions) error {
+	client, err := c.ensureGitHubPRReady()
+	if err != nil {
+		return err
+	}
+	return c.createGitHubPullRequestWithClient(client, options)
+}
+
+func (c *CLI) ensureGitHubPRReady() (githubPRClient, error) {
 	client := c.githubPR
 	if client == nil {
 		client = newCommandGitHubPRClient()
@@ -453,12 +513,12 @@ func (c *CLI) createGitHubPullRequest(options githubPRCreateOptions) error {
 	if !client.Available() {
 		fmt.Println("! Creating a GitHub pull request requires the official GitHub CLI (`gh`).")
 		fmt.Println("Install instructions: https://github.com/cli/cli#installation")
-		return fmt.Errorf("install `gh`, authenticate with `gh auth login`, then rerun `gmit pr --create`")
+		return nil, fmt.Errorf("install `gh`, authenticate with `gh auth login`, then rerun `gmit pr --create`")
 	}
 	if err := client.AuthStatus(); err != nil {
 		fmt.Println("! GitHub CLI is not authenticated. Gmit uses the official `gh auth login` flow.")
 		if c.confirmGitHubLogin == nil && (!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
-			return fmt.Errorf("run `gh auth login`, then rerun `gmit pr --create`: %w", err)
+			return nil, fmt.Errorf("run `gh auth login`, then rerun `gmit pr --create`: %w", err)
 		}
 		confirmed, promptErr := false, error(nil)
 		if c.confirmGitHubLogin != nil {
@@ -467,18 +527,22 @@ func (c *CLI) createGitHubPullRequest(options githubPRCreateOptions) error {
 			confirmed, promptErr = promptYesNo("Start GitHub authentication now? (y/N): ")
 		}
 		if promptErr != nil {
-			return promptErr
+			return nil, promptErr
 		}
 		if !confirmed {
-			return fmt.Errorf("authenticate with `gh auth login`, then rerun `gmit pr --create`")
+			return nil, fmt.Errorf("authenticate with `gh auth login`, then rerun `gmit pr --create`")
 		}
 		if loginErr := client.Login(); loginErr != nil {
-			return fmt.Errorf("GitHub authentication failed: %w", loginErr)
+			return nil, fmt.Errorf("GitHub authentication failed: %w", loginErr)
 		}
 		if err := client.AuthStatus(); err != nil {
-			return fmt.Errorf("GitHub CLI authentication is still unavailable; run `gh auth status`: %w", err)
+			return nil, fmt.Errorf("GitHub CLI authentication is still unavailable; run `gh auth status`: %w", err)
 		}
 	}
+	return client, nil
+}
+
+func (c *CLI) createGitHubPullRequestWithClient(client githubPRClient, options githubPRCreateOptions) error {
 	branch, err := client.CurrentBranch()
 	if err != nil {
 		return fmt.Errorf("could not determine the current Git branch: %w", err)
