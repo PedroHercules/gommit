@@ -45,18 +45,166 @@ func TestParseCommitArgsRejectsUnsupportedOptionsAndForce(t *testing.T) {
 }
 
 func TestParsePRArgsDefaultsBaseAndPassesModel(t *testing.T) {
-	base, model, err := parsePRArgs([]string{"--model", "grok-4.1-fast"})
+	options, err := parsePRArgs([]string{"--model", "grok-4.1-fast"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if base != "main" || model != "grok-4.1-fast" {
-		t.Fatalf("got base=%q model=%q, want main and grok-4.1-fast", base, model)
+	if options.baseBranch != "main" || options.model != "grok-4.1-fast" {
+		t.Fatalf("got base=%q model=%q, want main and grok-4.1-fast", options.baseBranch, options.model)
 	}
-	if _, _, err := parsePRArgs([]string{"--base-branch"}); err == nil {
+	if _, err := parsePRArgs([]string{"--base-branch"}); err == nil {
 		t.Fatal("missing base branch value should fail")
 	}
-	if _, _, err := parsePRArgs([]string{"--unknown"}); err == nil {
+	if _, err := parsePRArgs([]string{"--unknown"}); err == nil {
 		t.Fatal("unsupported PR option should fail")
+	}
+}
+
+func TestParsePRArgsCreationOptions(t *testing.T) {
+	options, err := parsePRArgs([]string{"--create", "--title", "Custom title", "--reviewer", "alice, team/reviewers", "--reviewer", "bob", "--draft"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !options.create || !options.draft || !options.draftSet || !options.reviewersSet {
+		t.Fatalf("creation options not parsed: %+v", options)
+	}
+	if options.title != "Custom title" || strings.Join(options.reviewers, ",") != "alice,team/reviewers,bob" {
+		t.Fatalf("title/reviewers parsed incorrectly: %+v", options)
+	}
+}
+
+func TestSplitPRTitleAndBody(t *testing.T) {
+	title, body := splitPRTitleAndBody("# Generated title\n\n## Description\nDetails\n", "")
+	if title != "Generated title" || body != "## Description\nDetails" {
+		t.Fatalf("got title=%q body=%q", title, body)
+	}
+	title, body = splitPRTitleAndBody("# Generated title\n\nBody", "Override")
+	if title != "Override" || body != "Body" {
+		t.Fatalf("override got title=%q body=%q", title, body)
+	}
+	title, body = splitPRTitleAndBody("Description without heading", "")
+	if title != "" || body != "Description without heading" {
+		t.Fatalf("missing heading got title=%q body=%q", title, body)
+	}
+}
+
+type fakeGitHubPRClient struct {
+	available     bool
+	authErr       error
+	loginErr      error
+	branch        string
+	localHead     string
+	remoteHead    string
+	remoteErr     error
+	reviewers     []string
+	listErr       error
+	pushErr       error
+	createErr     error
+	loginCalls    int
+	pushCalls     int
+	createCall    *githubPRCreateOptions
+	createdBranch string
+}
+
+func (f *fakeGitHubPRClient) Available() bool   { return f.available }
+func (f *fakeGitHubPRClient) AuthStatus() error { return f.authErr }
+func (f *fakeGitHubPRClient) Login() error {
+	f.loginCalls++
+	if f.loginErr == nil {
+		f.authErr = nil
+	}
+	return f.loginErr
+}
+func (f *fakeGitHubPRClient) CurrentBranch() (string, error)    { return f.branch, nil }
+func (f *fakeGitHubPRClient) LocalHead() (string, error)        { return f.localHead, nil }
+func (f *fakeGitHubPRClient) RemoteHead(string) (string, error) { return f.remoteHead, f.remoteErr }
+func (f *fakeGitHubPRClient) ListReviewers() ([]string, error)  { return f.reviewers, f.listErr }
+func (f *fakeGitHubPRClient) PushBranch(string) error {
+	f.pushCalls++
+	if f.pushErr == nil {
+		f.remoteHead = f.localHead
+	}
+	return f.pushErr
+}
+func (f *fakeGitHubPRClient) Create(options githubPRCreateOptions, branch string) (string, error) {
+	f.createCall = &options
+	f.createdBranch = branch
+	return "https://github.com/acme/project/pull/42", f.createErr
+}
+
+func TestCreateGitHubPullRequestPushesOnlyAfterApprovalAndPassesOptions(t *testing.T) {
+	client := &fakeGitHubPRClient{available: true, branch: "feature/login", localHead: "local-sha"}
+	cli := &CLI{
+		githubPR: client,
+		confirmPRPush: func(branch string) (bool, error) {
+			if branch != "feature/login" {
+				t.Fatalf("confirmation branch = %q", branch)
+			}
+			return true, nil
+		},
+	}
+	options := githubPRCreateOptions{BaseBranch: "develop", Title: "Add login", Body: "## Description\nDetails", Reviewers: []string{"alice", "team/reviewers"}, Draft: true}
+	if err := cli.createGitHubPullRequest(options); err != nil {
+		t.Fatal(err)
+	}
+	if client.pushCalls != 1 || client.createCall == nil {
+		t.Fatalf("pushes=%d create=%+v", client.pushCalls, client.createCall)
+	}
+	if client.createdBranch != "feature/login" || client.createCall.Title != options.Title || client.createCall.BaseBranch != options.BaseBranch || !client.createCall.Draft || strings.Join(client.createCall.Reviewers, ",") != "alice,team/reviewers" {
+		t.Fatalf("created PR options = %+v on %q", client.createCall, client.createdBranch)
+	}
+}
+
+func TestCreateGitHubPullRequestCancellationDoesNotPushOrCreate(t *testing.T) {
+	client := &fakeGitHubPRClient{available: true, branch: "feature/login", localHead: "local-sha"}
+	cli := &CLI{githubPR: client, confirmPRPush: func(string) (bool, error) { return false, nil }}
+	if err := cli.createGitHubPullRequest(githubPRCreateOptions{BaseBranch: "main", Title: "Add login"}); err != nil {
+		t.Fatal(err)
+	}
+	if client.pushCalls != 0 || client.createCall != nil {
+		t.Fatalf("pushes=%d create=%+v; cancellation must have no side effects", client.pushCalls, client.createCall)
+	}
+}
+
+func TestCreateGitHubPullRequestMissingCLIAndAuth(t *testing.T) {
+	missing := &fakeGitHubPRClient{}
+	if err := (&CLI{githubPR: missing}).createGitHubPullRequest(githubPRCreateOptions{}); err == nil || !strings.Contains(err.Error(), "install `gh`") {
+		t.Fatalf("missing gh error = %v", err)
+	}
+	client := &fakeGitHubPRClient{available: true, authErr: os.ErrPermission, branch: "feature", localHead: "same", remoteHead: "same"}
+	cli := &CLI{githubPR: client, confirmGitHubLogin: func() (bool, error) { return true, nil }}
+	if err := cli.createGitHubPullRequest(githubPRCreateOptions{BaseBranch: "main", Title: "Title"}); err != nil {
+		t.Fatal(err)
+	}
+	if client.loginCalls != 1 || client.createCall == nil {
+		t.Fatalf("login calls=%d create=%+v", client.loginCalls, client.createCall)
+	}
+}
+
+func TestCreateGitHubPullRequestNonInteractiveRequiresPrePushedBranch(t *testing.T) {
+	client := &fakeGitHubPRClient{available: true, branch: "feature", localHead: "local", remoteHead: ""}
+	err := (&CLI{githubPR: client}).createGitHubPullRequest(githubPRCreateOptions{BaseBranch: "main", Title: "Title"})
+	if err == nil || !strings.Contains(err.Error(), "must be pushed") {
+		t.Fatalf("error = %v", err)
+	}
+	if client.pushCalls != 0 || client.createCall != nil {
+		t.Fatalf("pushes=%d create=%+v", client.pushCalls, client.createCall)
+	}
+}
+
+func TestPromptForPRReviewersFallsBackToManualSelection(t *testing.T) {
+	client := &fakeGitHubPRClient{listErr: os.ErrPermission}
+	var pickerReceived []string
+	cli := &CLI{selectPRReviewers: func(candidates, _ []string) (reviewerPickerResult, error) {
+		pickerReceived = candidates
+		return reviewerPickerResult{Reviewers: []string{"team/reviewers"}}, nil
+	}}
+	got, err := cli.promptForPRReviewers(client)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pickerReceived) != 0 || strings.Join(got, ",") != "team/reviewers" {
+		t.Fatalf("manual fallback candidates=%q reviewers=%q", pickerReceived, got)
 	}
 }
 
