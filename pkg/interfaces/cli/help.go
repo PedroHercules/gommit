@@ -28,6 +28,10 @@ COMMIT OPTIONS
 PR OPTIONS
     --base-branch <name>  Compare with origin/<name> (default: main)
     --model, -m <id>      Use a model from the configured provider
+    --create              Create the PR after generating its preview
+    --title <text>        Override the title extracted from the generated preview
+    --reviewer <login>    Request a review (repeatable; accepts comma-separated logins/teams)
+    --draft               Create the pull request as a draft
 
 CONFIG COMMANDS
     config                          Open interactive provider setup
@@ -50,6 +54,7 @@ EXAMPLES
     gmit commit --model provider/model-id
     gmit commit --commit
     gmit pr --base-branch main --model provider/model-id
+    gmit pr --create --reviewer alice --reviewer my-team --draft
     gmit validate "feat: add user authentication"
     gmit update
 
@@ -60,6 +65,8 @@ QUICK NOTES
     ! OpenRouter and xAI control pricing and billing. Gmit cannot cap charges.
     › Prefer free models and verify current prices with your provider.
     › PR generation fetches origin/<base>; it does not switch branches or pull changes.
+    › Creating a PR requires GitHub CLI (gh) installed and authenticated with gh auth login.
+    › Gmit asks before pushing an unpublished branch to origin.
     › Gmit checks npm for updates on every launch and shows release notes when available.
     › ` + "`gmit update`" + ` installs the latest release using npm; it never updates automatically.
     › Run ` + "`gmit config help`" + ` for configuration details.

@@ -37,6 +37,7 @@ Gmit checks npm for a newer stable version whenever you run a command. If one is
 - Git installed and available as `git` in your terminal.
 - An OpenRouter account/API key or an xAI account/API key.
 - For Grok OAuth only: the official `grok` CLI. During setup, Gmit checks for it and, if it is missing, offers to install it globally with npm after asking you. You can also follow [xAI's current installation instructions](https://docs.x.ai/build/overview) yourself.
+- For creating GitHub pull requests only: the official [GitHub CLI (`gh`)](https://github.com/cli/cli#installation), installed and authenticated with `gh auth login`. Gmit can still generate a PR description without `gh`.
 - A terminal for interactive setup and model selection. Most commands also work non-interactively.
 
 ## Supported platforms
@@ -107,15 +108,28 @@ Options:
 
 ### `gmit pr`
 
-Generates a Markdown pull request description from the code diff between your current `HEAD` and the merge base with a remote-tracking branch. By default it fetches `origin` and compares against `origin/main`.
+Generates a Markdown pull request description from the code diff between your current `HEAD` and the merge base with a remote-tracking branch. By default it fetches `origin` and compares against `origin/main`. In an interactive terminal, Gmit displays the full preview and lets you create a GitHub PR or keep the preview only. Use `--create` to request creation directly.
 
 ```sh
 gmit pr
 gmit pr --base-branch develop
 gmit pr --base-branch main --model provider/model-id
+gmit pr --create --reviewer alice --reviewer my-team --draft
+gmit pr --create --title "Add account recovery" --reviewer alice
 ```
 
-Gmit requires the named branch to exist on the `origin` remote. If `origin` or the branch is unavailable, it stops with an error instead of generating a description from incomplete data. It fetches from `origin` but does not checkout branches, pull into your current branch, or modify the working tree. The output is the generated Markdown description; review it before opening a PR.
+Options:
+
+- `--base-branch <name>` selects the target branch on `origin` (default: `main`).
+- `--model <id>` or `-m <id>` uses a model from the configured provider.
+- `--create` creates the GitHub PR after generating the preview. In a terminal, Gmit asks for reviewers and whether it should be a draft unless you provide those options.
+- `--title <text>` overrides the title extracted from the generated Markdown heading. If the model did not return a heading, Gmit asks for a title in an interactive terminal; otherwise provide `--title`.
+- `--reviewer <login>` requests a review from a GitHub username or team. Repeat the option or separate multiple handles with commas.
+- `--draft` creates the PR as a draft. Without it, non-interactive creation creates a PR ready for review.
+
+Creating a PR requires the official GitHub CLI (`gh`) installed and authenticated. If it is missing, Gmit prints the [official installation guide](https://github.com/cli/cli#installation); installation methods vary by operating system. If `gh` is installed but not authenticated, Gmit offers to start `gh auth login` in an interactive terminal. You can also run `gh auth login` yourself.
+
+If the current branch is not published at the same commit on `origin`, Gmit asks before running `git push --set-upstream origin <branch>`. In non-interactive use, publish the branch yourself and rerun the command. Gmit does not force-push. If `origin` or the named base branch is unavailable, it stops with an error instead of generating a description from incomplete data. It fetches from `origin`, but does not checkout branches or pull into your current branch.
 
 ### `gmit validate <message>`
 

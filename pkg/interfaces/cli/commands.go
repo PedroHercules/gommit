@@ -23,6 +23,12 @@ type CLI struct {
 	configService      *config_services.ConfigService
 	prService          *pr_services.ServiceContainer
 	selectCommitAction func() (string, error)
+	selectPRAction     func(string) (string, error)
+	selectPRDraft      func() (bool, error)
+	readPRReviewers    func() ([]string, error)
+	confirmGitHubLogin func() (bool, error)
+	confirmPRPush      func(string) (bool, error)
+	githubPR           githubPRClient
 	updates            *updateManager
 	updateOutput       io.Writer
 }
@@ -38,6 +44,8 @@ const (
 	commitAndPushAction = "1. Commit and push"
 	commitOnlyAction    = "2. Commit only"
 	cancelCommitAction  = "3. Cancel"
+	createPRAction      = "Create pull request"
+	previewOnlyAction   = "Keep preview only"
 )
 
 // NewCLI creates a new CLI instance.
@@ -46,6 +54,7 @@ func NewCLI(commitService *commit_services.CommitService, configService *config_
 		commitService: commitService,
 		configService: configService,
 		prService:     prService,
+		githubPR:      newCommandGitHubPRClient(),
 		updates:       newUpdateManager(version),
 		updateOutput:  os.Stderr,
 	}
@@ -236,17 +245,20 @@ func (c *CLI) commitGeneratedMessage(message string, push bool) error {
 }
 
 func (c *CLI) handlePr(args []string) error {
-	baseBranch, model, err := parsePRArgs(args)
+	options, err := parsePRArgs(args)
 	if err != nil {
 		return err
 	}
-	req := &pr_services.GeneratePRPreviewRequest{BaseBranch: baseBranch, Model: model}
+	req := &pr_services.GeneratePRPreviewRequest{BaseBranch: options.baseBranch, Model: options.model}
 	var resp *pr_services.GeneratePRPreviewResponse
 	err = withSpinner("Building pull request preview", func() error {
 		var callErr error
 		resp, callErr = c.prService.GeneratePRPreview(req)
 		if callErr != nil {
 			return fmt.Errorf("failed to generate PR description: %w", callErr)
+		}
+		if resp == nil {
+			return fmt.Errorf("PR description generation returned no response")
 		}
 		if !resp.Success {
 			return fmt.Errorf("PR description generation failed: %s", resp.ErrorMessage)
@@ -256,31 +268,263 @@ func (c *CLI) handlePr(args []string) error {
 	if err != nil {
 		return err
 	}
+	if resp == nil || resp.PullRequest == nil {
+		return fmt.Errorf("PR description generation returned no pull request content")
+	}
 	fmt.Printf("\nPull request preview\n%s\n", resp.PullRequest.Body)
-	return nil
+
+	create := options.create
+	if !options.create && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		choice, choiceErr := c.choosePRAction(resp.PullRequest.Body)
+		if choiceErr != nil {
+			return choiceErr
+		}
+		if choice != createPRAction {
+			fmt.Println("› Keeping preview only. No pull request was created.")
+			return nil
+		}
+		create = true
+	}
+	if !create {
+		return nil
+	}
+
+	title, body := splitPRTitleAndBody(resp.PullRequest.Body, options.title)
+	if strings.TrimSpace(title) == "" {
+		if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+			return fmt.Errorf("could not find a title in the generated PR description; provide one with --title")
+		}
+		title, err = promptLine("PR title (required): ")
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(title) == "" {
+			return fmt.Errorf("PR title cannot be empty")
+		}
+	}
+
+	reviewers := options.reviewers
+	if !options.reviewersSet && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		reviewers, err = c.promptForPRReviewers()
+		if err != nil {
+			return err
+		}
+	}
+	draft := options.draft
+	if !options.draftSet && term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+		draft, err = c.choosePRDraft()
+		if err != nil {
+			return err
+		}
+	}
+
+	return c.createGitHubPullRequest(githubPRCreateOptions{
+		BaseBranch: options.baseBranch,
+		Title:      strings.TrimSpace(title),
+		Body:       strings.TrimSpace(body),
+		Reviewers:  reviewers,
+		Draft:      draft,
+	})
 }
 
-func parsePRArgs(args []string) (baseBranch, model string, err error) {
-	baseBranch = "main"
+type prCommandOptions struct {
+	baseBranch   string
+	model        string
+	create       bool
+	title        string
+	reviewers    []string
+	reviewersSet bool
+	draft        bool
+	draftSet     bool
+}
+
+func parsePRArgs(args []string) (prCommandOptions, error) {
+	options := prCommandOptions{baseBranch: "main"}
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--base-branch":
 			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
-				return "", "", fmt.Errorf("--base-branch requires a branch name")
+				return prCommandOptions{}, fmt.Errorf("--base-branch requires a branch name")
 			}
 			i++
-			baseBranch = args[i]
+			options.baseBranch = args[i]
 		case "--model", "-m":
 			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
-				return "", "", fmt.Errorf("%s requires a model ID", args[i])
+				return prCommandOptions{}, fmt.Errorf("%s requires a model ID", args[i])
 			}
 			i++
-			model = args[i]
+			options.model = args[i]
+		case "--create":
+			options.create = true
+		case "--title":
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return prCommandOptions{}, fmt.Errorf("--title requires a title")
+			}
+			i++
+			options.title = args[i]
+		case "--reviewer":
+			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
+				return prCommandOptions{}, fmt.Errorf("--reviewer requires a GitHub username or team")
+			}
+			i++
+			options.reviewersSet = true
+			for _, reviewer := range strings.Split(args[i], ",") {
+				reviewer = strings.TrimSpace(reviewer)
+				if reviewer != "" {
+					options.reviewers = append(options.reviewers, reviewer)
+				}
+			}
+			if len(options.reviewers) == 0 {
+				return prCommandOptions{}, fmt.Errorf("--reviewer requires at least one GitHub username or team")
+			}
+		case "--draft":
+			options.draft, options.draftSet = true, true
 		default:
-			return "", "", fmt.Errorf("unsupported PR argument %q; run `gmit help`", args[i])
+			return prCommandOptions{}, fmt.Errorf("unsupported PR argument %q; run `gmit help`", args[i])
 		}
 	}
-	return baseBranch, model, nil
+	return options, nil
+}
+
+func (c *CLI) choosePRAction(message string) (string, error) {
+	if c.selectPRAction != nil {
+		return c.selectPRAction(message)
+	}
+	return promptChoiceWithMessage("What would you like to do?", message, []string{createPRAction, previewOnlyAction})
+}
+
+func (c *CLI) promptForPRReviewers() ([]string, error) {
+	if c.readPRReviewers != nil {
+		return c.readPRReviewers()
+	}
+	value, err := promptLine("Reviewers (GitHub usernames or teams, comma-separated; Enter to skip): ")
+	if err != nil {
+		return nil, err
+	}
+	var reviewers []string
+	for _, reviewer := range strings.Split(value, ",") {
+		if reviewer = strings.TrimSpace(reviewer); reviewer != "" {
+			reviewers = append(reviewers, reviewer)
+		}
+	}
+	return reviewers, nil
+}
+
+func (c *CLI) choosePRDraft() (bool, error) {
+	if c.selectPRDraft != nil {
+		return c.selectPRDraft()
+	}
+	choice, err := promptChoice("Pull request status", []string{"Ready for review", "Draft"})
+	if err != nil {
+		return false, err
+	}
+	return choice == "Draft", nil
+}
+
+func promptLine(prompt string) (string, error) {
+	fmt.Print(prompt)
+	return readTerminalLine()
+}
+
+func splitPRTitleAndBody(markdown, override string) (string, string) {
+	lines := strings.Split(markdown, "\n")
+	title := strings.TrimSpace(override)
+	bodyLines := make([]string, 0, len(lines))
+	titleRemoved := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !titleRemoved && strings.HasPrefix(trimmed, "# ") {
+			if title == "" {
+				title = strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+			}
+			titleRemoved = true
+			continue
+		}
+		bodyLines = append(bodyLines, line)
+	}
+	return title, strings.TrimSpace(strings.Join(bodyLines, "\n"))
+}
+
+func (c *CLI) createGitHubPullRequest(options githubPRCreateOptions) error {
+	client := c.githubPR
+	if client == nil {
+		client = newCommandGitHubPRClient()
+	}
+	if !client.Available() {
+		fmt.Println("! Creating a GitHub pull request requires the official GitHub CLI (`gh`).")
+		fmt.Println("Install instructions: https://github.com/cli/cli#installation")
+		return fmt.Errorf("install `gh`, authenticate with `gh auth login`, then rerun `gmit pr --create`")
+	}
+	if err := client.AuthStatus(); err != nil {
+		fmt.Println("! GitHub CLI is not authenticated. Gmit uses the official `gh auth login` flow.")
+		if c.confirmGitHubLogin == nil && (!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
+			return fmt.Errorf("run `gh auth login`, then rerun `gmit pr --create`: %w", err)
+		}
+		confirmed, promptErr := false, error(nil)
+		if c.confirmGitHubLogin != nil {
+			confirmed, promptErr = c.confirmGitHubLogin()
+		} else {
+			confirmed, promptErr = promptYesNo("Start GitHub authentication now? (y/N): ")
+		}
+		if promptErr != nil {
+			return promptErr
+		}
+		if !confirmed {
+			return fmt.Errorf("authenticate with `gh auth login`, then rerun `gmit pr --create`")
+		}
+		if loginErr := client.Login(); loginErr != nil {
+			return fmt.Errorf("GitHub authentication failed: %w", loginErr)
+		}
+		if err := client.AuthStatus(); err != nil {
+			return fmt.Errorf("GitHub CLI authentication is still unavailable; run `gh auth status`: %w", err)
+		}
+	}
+	branch, err := client.CurrentBranch()
+	if err != nil {
+		return fmt.Errorf("could not determine the current Git branch: %w", err)
+	}
+	if branch == "" || branch == "HEAD" {
+		return fmt.Errorf("checkout a named branch before creating a pull request")
+	}
+	localHead, err := client.LocalHead()
+	if err != nil {
+		return fmt.Errorf("could not read the current Git commit: %w", err)
+	}
+	remoteHead, err := client.RemoteHead(branch)
+	if err != nil {
+		return fmt.Errorf("could not check branch `origin/%s`: %w", branch, err)
+	}
+	if localHead != remoteHead {
+		if c.confirmPRPush == nil && (!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
+			return fmt.Errorf("branch `%s` must be pushed to origin before creating the PR; push it and rerun `gmit pr --create`", branch)
+		}
+		confirmed, promptErr := false, error(nil)
+		if c.confirmPRPush != nil {
+			confirmed, promptErr = c.confirmPRPush(branch)
+		} else {
+			confirmed, promptErr = promptYesNo(fmt.Sprintf("Push branch `%s` to origin before creating the PR? (y/N): ", branch))
+		}
+		if promptErr != nil {
+			return promptErr
+		}
+		if !confirmed {
+			fmt.Println("› PR creation cancelled. The branch was not pushed.")
+			return nil
+		}
+		if err := client.PushBranch(branch); err != nil {
+			return fmt.Errorf("failed to push branch `%s` to origin: %w", branch, err)
+		}
+	}
+	url, err := client.Create(options, branch)
+	if err != nil {
+		return fmt.Errorf("failed to create GitHub pull request: %w", err)
+	}
+	if url != "" {
+		fmt.Printf("\n✓ Pull request created: %s\n", url)
+	} else {
+		fmt.Println("\n✓ Pull request created on GitHub.")
+	}
+	return nil
 }
 
 func (c *CLI) handleValidate(args []string) error {
