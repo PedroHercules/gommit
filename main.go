@@ -42,7 +42,7 @@ func main() {
 	configService := config_services.NewConfigService(configUseCase)
 	pullRequestService := pr_services.NewPullRequestService(pullRequestUseCase)
 
-	cliHandler := cli.NewCLI(commitService, configService, pullRequestService)
+	cliHandler := cli.NewCLI(commitService, configService, pullRequestService, gitRepo)
 
 	if err := cliHandler.Run(os.Args); err != nil {
 		fmt.Printf("✗ %v\n", err)

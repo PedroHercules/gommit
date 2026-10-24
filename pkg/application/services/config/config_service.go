@@ -68,6 +68,14 @@ func (c *ConfigService) SetActiveProvider(provider string) error {
 	return c.services.apiKeyService.configUC.SetActiveProvider(provider)
 }
 
+func (c *ConfigService) SecurityScanEnabled() (bool, error) {
+	return c.services.apiKeyService.configUC.SecurityScanEnabled()
+}
+
+func (c *ConfigService) SetSecurityScanEnabled(enabled bool) error {
+	return c.services.apiKeyService.configUC.SetSecurityScanEnabled(enabled)
+}
+
 func (c *ConfigService) SetProviderDefaultModel(provider, model string) (*SetupModelResponse, error) {
 	ucResponse, err := c.services.apiKeyService.configUC.SetProviderDefaultModel(provider, model)
 	if err != nil {

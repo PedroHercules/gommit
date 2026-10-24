@@ -51,6 +51,9 @@ type ConfigRepository interface {
 	LoadProviderDefaultModel(provider string) (string, error)
 	DeleteProviderDefaultModel(provider string) error
 
+	LoadSecurityScanEnabled() (bool, error)
+	SaveSecurityScanEnabled(enabled bool) error
+
 	// Exists checks if a configuration file exists.
 	Exists() bool
 }

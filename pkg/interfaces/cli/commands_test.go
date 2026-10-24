@@ -12,12 +12,14 @@ import (
 type fakeCommitCommandService struct {
 	preview     *commit_services.GenerateCommitPreviewEntity
 	previewDTO  commit_services.GenerateCommitPreviewDTO
+	previewCall int
 	confirm     *commit_services.ConfirmCommitEntity
 	confirmCall int
 	pushCall    int
 }
 
 func (f *fakeCommitCommandService) GenerateCommitPreview(dto commit_services.GenerateCommitPreviewDTO) (*commit_services.GenerateCommitPreviewEntity, error) {
+	f.previewCall++
 	f.previewDTO = dto
 	return f.preview, nil
 }
@@ -38,7 +40,7 @@ func (f *fakeCommitCommandService) PushCurrentBranch() error {
 
 func TestParseCommitArgsRejectsUnsupportedOptionsAndForce(t *testing.T) {
 	for _, args := range [][]string{{"--force"}, {"--no-such-option"}, {"--model"}} {
-		if _, _, _, err := parseCommitArgs(args); err == nil {
+		if _, _, _, _, err := parseCommitArgs(args); err == nil {
 			t.Errorf("parseCommitArgs(%q) expected an error", args)
 		}
 	}

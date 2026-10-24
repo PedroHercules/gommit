@@ -70,4 +70,32 @@ func TestLegacyOpenRouterConfigurationRemainsReadable(t *testing.T) {
 	if config.Provider != "openrouter" || config.DefaultModel != "vendor/legacy-model" || config.APIKey != "sk-or-v1-legacy-key-123456" {
 		t.Fatalf("legacy configuration was not preserved: %+v", config)
 	}
+	enabled, err := repo.LoadSecurityScanEnabled()
+	if err != nil || enabled {
+		t.Fatalf("legacy security scan setting = %v, %v; want false, nil", enabled, err)
+	}
+}
+
+func TestSecurityScanSettingDefaultsOffAndPersists(t *testing.T) {
+	repo := testFileConfigRepository(t)
+	enabled, err := repo.LoadSecurityScanEnabled()
+	if err != nil || enabled {
+		t.Fatalf("initial security scan setting = %v, %v; want false, nil", enabled, err)
+	}
+
+	if err := repo.SaveSecurityScanEnabled(true); err != nil {
+		t.Fatal(err)
+	}
+	enabled, err = repo.LoadSecurityScanEnabled()
+	if err != nil || !enabled {
+		t.Fatalf("enabled security scan setting = %v, %v; want true, nil", enabled, err)
+	}
+
+	if err := repo.SaveSecurityScanEnabled(false); err != nil {
+		t.Fatal(err)
+	}
+	enabled, err = repo.LoadSecurityScanEnabled()
+	if err != nil || enabled {
+		t.Fatalf("disabled security scan setting = %v, %v; want false, nil", enabled, err)
+	}
 }

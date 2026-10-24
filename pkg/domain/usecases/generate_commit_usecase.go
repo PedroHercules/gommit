@@ -37,8 +37,9 @@ func NewGenerateCommitUseCase(
 
 // GenerateCommitRequest represents the input for generating a commit.
 type GenerateCommitRequest struct {
-	Model string // Optional: specific model to use
-	Force bool   // Whether to force generation even with warnings
+	Model string            // Optional: specific model to use
+	Force bool              // Whether to force generation even with warnings
+	Diff  *entities.GitDiff // Optional pre-inspected staged snapshot
 }
 
 // GenerateCommitResponse represents the output of commit generation.
@@ -74,9 +75,12 @@ func (uc *GenerateCommitUseCase) Execute(req GenerateCommitRequest) (*GenerateCo
 	}
 
 	// Step 3: Get the staged diff
-	diff, err := uc.gitRepo.GetStagedDiff()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get staged diff: %w", err)
+	diff := req.Diff
+	if diff == nil {
+		diff, err = uc.gitRepo.GetStagedDiff()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get staged diff: %w", err)
+		}
 	}
 
 	response.Diff = diff

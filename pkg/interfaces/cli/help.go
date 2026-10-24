@@ -16,6 +16,7 @@ COMMANDS
     pr                  Generate a pull request description
     validate <message>  Check a commit message
     config              Configure a provider, credentials, and model
+    security <action>   Enable, disable, or check the security scan
     version             Show version
     update              Update the npm installation to the latest release
     help                Show help
@@ -24,6 +25,7 @@ COMMIT OPTIONS
     --model, -m <id>    Use a model from the configured provider
     --commit            Create one Git commit without showing the selector
     --dry-run           Generate and display a message without committing
+    --allow-sensitive   Legacy flag; scan warnings still require review when enabled
 
 PR OPTIONS
     --base-branch <name>  Compare with origin/<name> (default: main)
@@ -32,6 +34,7 @@ PR OPTIONS
     --title <text>        Override the title extracted from the generated preview
     --reviewer <login>    Request a review (repeatable; accepts comma-separated logins/teams)
     --draft               Create the pull request as a draft
+    --allow-sensitive     Legacy flag; scan warnings still require review when enabled
 
 CONFIG COMMANDS
     config                          Open interactive provider setup
@@ -46,10 +49,16 @@ CONFIG COMMANDS
     config validate                 Check provider configuration
     config help                     Show configuration help
 
+SECURITY SCAN
+    gmit security on       Enable the local sensitive-data scan
+    gmit security off      Disable the scan (default)
+    gmit security status   Show whether the scan is on or off
+
 EXAMPLES
     gmit
     gmit config
     gmit config list-models
+    gmit security status
     gmit commit --dry-run
     gmit commit --model provider/model-id
     gmit commit --commit
@@ -62,6 +71,11 @@ QUICK NOTES
     › Commit generation uses staged changes only. Stage files with git add first.
     › Review the full preview, then choose Commit and push, Commit only, or Cancel.
     › --dry-run still sends a provider request and may incur charges.
+    › The local sensitive-data scan is off by default. Run gmit security on to enable it.
+    › When enabled, it checks diffs locally for likely credentials and sensitive files.
+    › Review possible secrets before sharing a diff; warnings never print detected values.
+    › Continue sends the full diff to your model provider; Cancel stops before generation.
+    › Without a terminal, enabled scans print warnings and continue automatically.
     ! OpenRouter and xAI control pricing and billing. Gmit cannot cap charges.
     › Prefer free models and verify current prices with your provider.
     › Review the full PR preview with ↑/↓ or PgUp/PgDn; Enter continues and Esc cancels.
@@ -85,8 +99,11 @@ USAGE
     gmit config [COMMAND]
 
 Run ` + "`gmit config`" + ` in a terminal to select OpenRouter or Grok, authenticate,
-and choose a model. For Grok OAuth, Gmit uses the official Grok CLI; if it is
-missing, Gmit offers to install it globally after asking you.
+choose a model, and choose whether to enable the security scan. It is off by
+default; review the diff before continuing, as checks can flag harmless content
+or miss sensitive data.
+For Grok OAuth, Gmit uses the official Grok CLI; if it is missing, Gmit offers
+to install it globally after asking you.
 
 COMMANDS
     set-key <key>       Save a key for the active provider

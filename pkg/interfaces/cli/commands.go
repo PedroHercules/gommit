@@ -13,23 +13,31 @@ import (
 	commit_services "github.com/PedroHercules/gommit/pkg/application/services/commit"
 	config_services "github.com/PedroHercules/gommit/pkg/application/services/config"
 	pr_services "github.com/PedroHercules/gommit/pkg/application/services/pull-request"
+	"github.com/PedroHercules/gommit/pkg/domain/entities"
+	"github.com/PedroHercules/gommit/pkg/domain/repositories"
 	"golang.org/x/term"
 )
 
 // CLI represents the command-line interface.
 // It coordinates between user input and application services.
 type CLI struct {
-	commitService      commitCommandService
-	configService      *config_services.ConfigService
-	prService          *pr_services.ServiceContainer
-	selectCommitAction func() (string, error)
-	selectPRDraft      func() (bool, error)
-	selectPRReviewers  func([]string, []string) (reviewerPickerResult, error)
-	confirmGitHubLogin func() (bool, error)
-	confirmPRPush      func(string) (bool, error)
-	githubPR           githubPRClient
-	updates            *updateManager
-	updateOutput       io.Writer
+	commitService            commitCommandService
+	configService            *config_services.ConfigService
+	prService                prPreviewCommandService
+	selectCommitAction       func() (string, error)
+	selectPRDraft            func() (bool, error)
+	selectPRReviewers        func([]string, []string) (reviewerPickerResult, error)
+	reviewSensitive          func(securityReport) (bool, error)
+	confirmSensitiveFallback func() (bool, error)
+	confirmGitHubLogin       func() (bool, error)
+	confirmPRPush            func(string) (bool, error)
+	githubPR                 githubPRClient
+	updates                  *updateManager
+	updateOutput             io.Writer
+	securityGit              repositories.GitRepository
+	securityScanEnabled      func() (bool, error)
+	saveSecurityScanEnabled  func(bool) error
+	confirmSecuritySetup     func(bool) (bool, error)
 }
 
 type commitCommandService interface {
@@ -37,6 +45,10 @@ type commitCommandService interface {
 	ConfirmCommit(commit_services.ConfirmCommitDTO) (*commit_services.ConfirmCommitEntity, error)
 	ValidateCommitMessage(string) (*commit_services.ValidateCommitMessageResult, error)
 	PushCurrentBranch() error
+}
+
+type prPreviewCommandService interface {
+	GeneratePRPreview(*pr_services.GeneratePRPreviewRequest) (*pr_services.GeneratePRPreviewResponse, error)
 }
 
 const (
@@ -48,8 +60,8 @@ const (
 )
 
 // NewCLI creates a new CLI instance.
-func NewCLI(commitService *commit_services.CommitService, configService *config_services.ConfigService, prService *pr_services.ServiceContainer) *CLI {
-	return &CLI{
+func NewCLI(commitService *commit_services.CommitService, configService *config_services.ConfigService, prService *pr_services.ServiceContainer, securityGit ...repositories.GitRepository) *CLI {
+	cli := &CLI{
 		commitService: commitService,
 		configService: configService,
 		prService:     prService,
@@ -57,6 +69,10 @@ func NewCLI(commitService *commit_services.CommitService, configService *config_
 		updates:       newUpdateManager(version),
 		updateOutput:  os.Stderr,
 	}
+	if len(securityGit) > 0 {
+		cli.securityGit = securityGit[0]
+	}
+	return cli
 }
 
 // Run executes the CLI with the provided arguments.
@@ -75,6 +91,8 @@ func (c *CLI) Run(args []string) error {
 		return c.handleCommit(args[2:])
 	case "config":
 		return c.handleConfig(args[2:])
+	case "security":
+		return c.handleSecurity(args[2:])
 	case "version":
 		return c.showVersion()
 	case "update":
@@ -126,7 +144,7 @@ func (c *CLI) handleUpdate(notice updateNotice) error {
 
 // handleCommit processes commit-related commands.
 func (c *CLI) handleCommit(args []string) error {
-	model, dryRun, autoCommit, err := parseCommitArgs(args)
+	model, dryRun, autoCommit, allowSensitive, err := parseCommitArgs(args)
 	if err != nil {
 		return err
 	}
@@ -137,7 +155,36 @@ func (c *CLI) handleCommit(args []string) error {
 		(!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
 		return fmt.Errorf("an interactive terminal is required to choose a commit action; use --commit to commit without pushing or --dry-run to preview")
 	}
-	req := commit_services.GenerateCommitPreviewDTO{Model: model, DryRun: dryRun}
+	var diff *entities.GitDiff
+	if c.securityGit != nil {
+		diff, err = c.securityGit.GetStagedDiff()
+		if err != nil {
+			return fmt.Errorf("failed to inspect staged changes: %w", err)
+		}
+		if diff == nil {
+			return fmt.Errorf("failed to inspect staged changes: Git returned no diff")
+		}
+		enabled, enabledErr := c.isSecurityScanEnabled()
+		if enabledErr != nil {
+			return fmt.Errorf("could not read security scan setting: %w", enabledErr)
+		}
+		if enabled {
+			if report := scanSensitiveDiff(diff.Content, diff.Files); report.hasFindings() {
+				annotateIgnoreStatus(&report, c.securityGit)
+				if err := c.handleSecurityReport(report, allowSensitive); err != nil {
+					return err
+				}
+			}
+			current, checkErr := c.securityGit.GetStagedDiff()
+			if checkErr != nil {
+				return fmt.Errorf("failed to verify staged changes after security review: %w", checkErr)
+			}
+			if current == nil || current.Content != diff.Content {
+				return fmt.Errorf("staged changes changed after security review; rerun gmit commit to inspect the current diff")
+			}
+		}
+	}
+	req := commit_services.GenerateCommitPreviewDTO{Model: model, DryRun: dryRun, Diff: diff}
 
 	var resp *commit_services.GenerateCommitPreviewEntity
 	err = withSpinner("Drafting commit message", func() error {
@@ -173,7 +220,7 @@ func (c *CLI) handleCommit(args []string) error {
 	}
 
 	if autoCommit {
-		return c.commitGeneratedMessage(resp.CommitMessage, false)
+		return c.commitGeneratedMessage(resp.CommitMessage, false, diff)
 	}
 	action, err := c.chooseCommitAction(resp.CommitMessage)
 	if err != nil {
@@ -181,9 +228,9 @@ func (c *CLI) handleCommit(args []string) error {
 	}
 	switch action {
 	case commitAndPushAction:
-		return c.commitGeneratedMessage(resp.CommitMessage, true)
+		return c.commitGeneratedMessage(resp.CommitMessage, true, diff)
 	case commitOnlyAction:
-		return c.commitGeneratedMessage(resp.CommitMessage, false)
+		return c.commitGeneratedMessage(resp.CommitMessage, false, diff)
 	case cancelCommitAction, "":
 		fmt.Println("\n› Commit cancelled. Your changes are still staged.")
 		return nil
@@ -192,12 +239,12 @@ func (c *CLI) handleCommit(args []string) error {
 	}
 }
 
-func parseCommitArgs(args []string) (model string, dryRun, autoCommit bool, err error) {
+func parseCommitArgs(args []string) (model string, dryRun, autoCommit, allowSensitive bool, err error) {
 	for i := 0; i < len(args); i++ {
 		switch args[i] {
 		case "--model", "-m":
 			if i+1 >= len(args) || strings.HasPrefix(args[i+1], "-") {
-				return "", false, false, fmt.Errorf("%s requires a model ID", args[i])
+				return "", false, false, false, fmt.Errorf("%s requires a model ID", args[i])
 			}
 			i++
 			model = args[i]
@@ -205,13 +252,60 @@ func parseCommitArgs(args []string) (model string, dryRun, autoCommit bool, err 
 			autoCommit = true
 		case "--dry-run":
 			dryRun = true
+		case "--allow-sensitive":
+			allowSensitive = true
 		case "--force":
-			return "", false, false, fmt.Errorf("--force is not supported; stage the changes you want to include and review the generated message")
+			return "", false, false, false, fmt.Errorf("--force is not supported; stage the changes you want to include and review the generated message")
 		default:
-			return "", false, false, fmt.Errorf("unsupported commit argument %q; run `gmit help`", args[i])
+			return "", false, false, false, fmt.Errorf("unsupported commit argument %q; run `gmit help`", args[i])
 		}
 	}
-	return model, dryRun, autoCommit, nil
+	return model, dryRun, autoCommit, allowSensitive, nil
+}
+
+func (c *CLI) handleSecurityReport(report securityReport, _ bool) error {
+	proceed := true
+	var err error
+	switch {
+	case c.reviewSensitive != nil:
+		proceed, err = c.reviewSensitive(report)
+	case term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())):
+		proceed, err = reviewSecurityWarning(report)
+	default:
+		printSecurityReport(os.Stderr, report)
+		fmt.Fprintln(os.Stderr, "› No interactive terminal; continuing with the normal command flow.")
+	}
+	if err != nil {
+		if c.confirmSensitiveFallback != nil || (term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd()))) {
+			fmt.Fprintf(os.Stderr, "› Full-screen warning unavailable: %v\n", err)
+			printSecurityReport(os.Stderr, report)
+			if c.confirmSensitiveFallback != nil {
+				proceed, err = c.confirmSensitiveFallback()
+			} else {
+				proceed, err = promptYesNo("Continue once and send the full diff to your model provider? [y/N]: ")
+			}
+		}
+		if err != nil {
+			return err
+		}
+	}
+	if !proceed {
+		return fmt.Errorf("cancelled before generation; no commit or pull request was created")
+	}
+	return nil
+}
+
+func printSecurityReport(out io.Writer, report securityReport) {
+	fmt.Fprintln(out, "⚠ Possible credentials or secrets found in the diff:")
+	for _, finding := range report.findings {
+		fmt.Fprintf(out, "  ! %s · %s · %s\n", finding.file, finding.category, finding.detail)
+		if finding.ignoreStatus != "" {
+			fmt.Fprintf(out, "    Git ignore: %s\n", finding.ignoreStatus)
+		}
+	}
+	fmt.Fprintln(out, "  No value is shown in this warning. Review the diff before continuing.")
+	fmt.Fprintln(out, "  Continuing sends the full diff to your configured model provider.")
+	fmt.Fprintln(out, "  In an interactive terminal, choose Continue once or Cancel at this warning.")
 }
 
 func (c *CLI) chooseCommitAction(message string) (string, error) {
@@ -225,7 +319,16 @@ func (c *CLI) chooseCommitAction(message string) (string, error) {
 	})
 }
 
-func (c *CLI) commitGeneratedMessage(message string, push bool) error {
+func (c *CLI) commitGeneratedMessage(message string, push bool, expectedDiff *entities.GitDiff) error {
+	if c.securityGit != nil && expectedDiff != nil {
+		current, err := c.securityGit.GetStagedDiff()
+		if err != nil {
+			return fmt.Errorf("failed to verify staged changes before commit: %w", err)
+		}
+		if current == nil || current.Content != expectedDiff.Content {
+			return fmt.Errorf("staged changes changed after message generation; no commit was created. Rerun gmit commit to review the current diff")
+		}
+	}
 	result, err := c.commitService.ConfirmCommit(commit_services.ConfirmCommitDTO{Message: message})
 	if err != nil {
 		return fmt.Errorf("failed to commit: %w", err)
@@ -248,7 +351,29 @@ func (c *CLI) handlePr(args []string) error {
 	if err != nil {
 		return err
 	}
-	req := &pr_services.GeneratePRPreviewRequest{BaseBranch: options.baseBranch, Model: options.model}
+	var diff *entities.GitDiff
+	if c.securityGit != nil {
+		enabled, enabledErr := c.isSecurityScanEnabled()
+		if enabledErr != nil {
+			return fmt.Errorf("could not read security scan setting: %w", enabledErr)
+		}
+		if err := c.securityGit.FetchRemote(); err != nil {
+			return fmt.Errorf("failed to fetch origin; PR generation requires origin/%s: %w", options.baseBranch, err)
+		}
+		diff, err = c.securityGit.GetDiffBetweenBranches("origin/"+options.baseBranch, "HEAD")
+		if err != nil {
+			return fmt.Errorf("failed to inspect PR changes: %w", err)
+		}
+		if enabled {
+			if report := scanSensitiveDiff(diff.Content, diff.Files); report.hasFindings() {
+				annotateIgnoreStatus(&report, c.securityGit)
+				if err := c.handleSecurityReport(report, options.allowSensitive); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	req := &pr_services.GeneratePRPreviewRequest{BaseBranch: options.baseBranch, Model: options.model, Diff: diff}
 	var resp *pr_services.GeneratePRPreviewResponse
 	err = withSpinner("Building pull request preview", func() error {
 		var callErr error
@@ -342,14 +467,15 @@ func (c *CLI) handlePr(args []string) error {
 }
 
 type prCommandOptions struct {
-	baseBranch   string
-	model        string
-	create       bool
-	title        string
-	reviewers    []string
-	reviewersSet bool
-	draft        bool
-	draftSet     bool
+	baseBranch     string
+	model          string
+	create         bool
+	title          string
+	reviewers      []string
+	reviewersSet   bool
+	draft          bool
+	draftSet       bool
+	allowSensitive bool
 }
 
 func parsePRArgs(args []string) (prCommandOptions, error) {
@@ -393,6 +519,8 @@ func parsePRArgs(args []string) (prCommandOptions, error) {
 			}
 		case "--draft":
 			options.draft, options.draftSet = true, true
+		case "--allow-sensitive":
+			options.allowSensitive = true
 		default:
 			return prCommandOptions{}, fmt.Errorf("unsupported PR argument %q; run `gmit help`", args[i])
 		}
@@ -640,7 +768,66 @@ func (c *CLI) handleConfig(args []string) error {
 	}
 }
 
+func (c *CLI) handleSecurity(args []string) error {
+	if len(args) != 1 {
+		return fmt.Errorf("usage: gmit security <on|off|status>")
+	}
+	switch args[0] {
+	case "status":
+		enabled, err := c.isSecurityScanEnabled()
+		if err != nil {
+			return fmt.Errorf("could not read security scan setting: %w", err)
+		}
+		if enabled {
+			fmt.Println("Security scan is ON.")
+		} else {
+			fmt.Println("Security scan is OFF.")
+		}
+		return nil
+	case "on", "off":
+		if c.configService == nil && c.saveSecurityScanEnabled == nil {
+			return fmt.Errorf("security scan settings are unavailable in this build")
+		}
+		enabled := args[0] == "on"
+		if err := c.setSecurityScanEnabled(enabled); err != nil {
+			return fmt.Errorf("could not update security scan setting: %w", err)
+		}
+		if enabled {
+			fmt.Println("✓ Security scan enabled.")
+		} else {
+			fmt.Println("✓ Security scan disabled.")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown security option %q; usage: gmit security <on|off|status>", args[0])
+	}
+}
+
+func (c *CLI) isSecurityScanEnabled() (bool, error) {
+	if c.securityScanEnabled != nil {
+		return c.securityScanEnabled()
+	}
+	if c.configService == nil {
+		return false, nil
+	}
+	return c.configService.SecurityScanEnabled()
+}
+
+func (c *CLI) setSecurityScanEnabled(enabled bool) error {
+	if c.saveSecurityScanEnabled != nil {
+		return c.saveSecurityScanEnabled(enabled)
+	}
+	if c.configService == nil {
+		return fmt.Errorf("security scan settings are unavailable in this build")
+	}
+	return c.configService.SetSecurityScanEnabled(enabled)
+}
+
 func (c *CLI) handleProviderSetup() error {
+	securityScanEnabled, err := c.isSecurityScanEnabled()
+	if err != nil {
+		return fmt.Errorf("could not read security scan setting: %w", err)
+	}
 	providerChoice, err := promptChoice("Select a provider", []string{"OpenRouter", "Grok"})
 	if err != nil {
 		return err
@@ -731,7 +918,39 @@ func (c *CLI) handleProviderSetup() error {
 		return err
 	}
 	fmt.Printf("✓ %s is ready with model %s.\n", providerChoice, model)
+	fmt.Println("\nLocal sensitive-data scan")
+	fmt.Println("An extra precaution to help spot sensitive data. The scan runs locally.")
+	fmt.Println("Please review the diff before continuing; automated checks can")
+	fmt.Println("occasionally flag harmless content or miss sensitive values.")
+	fmt.Println("Continuing after a warning sends the full diff to your model provider.")
+	enabled, err := c.askSecuritySetup(securityScanEnabled)
+	if err != nil {
+		return fmt.Errorf("could not read security scan choice: %w", err)
+	}
+	if err := c.setSecurityScanEnabled(enabled); err != nil {
+		return fmt.Errorf("could not save security scan setting: %w", err)
+	}
+	if enabled {
+		fmt.Println("✓ Security scan enabled.")
+	} else {
+		fmt.Println("✓ Security scan disabled.")
+	}
 	return nil
+}
+
+func (c *CLI) askSecuritySetup(current bool) (bool, error) {
+	status := "OFF"
+	if current {
+		status = "ON"
+	}
+	fmt.Printf("Current security scan status: %s. Press Enter to keep it.\n", status)
+	if c.confirmSecuritySetup != nil {
+		return c.confirmSecuritySetup(current)
+	}
+	if current {
+		return promptYesNoDefault("Enable the security scan? [Y/n]: ", true)
+	}
+	return promptYesNoDefault("Enable the security scan? [y/N]: ", false)
 }
 
 func promptAPIKey(label string) (string, error) {
@@ -811,6 +1030,24 @@ func promptYesNo(prompt string) (bool, error) {
 		return false, err
 	}
 	return strings.EqualFold(strings.TrimSpace(answer), "y") || strings.EqualFold(strings.TrimSpace(answer), "yes"), nil
+}
+
+func promptYesNoDefault(prompt string, defaultValue bool) (bool, error) {
+	fmt.Print(prompt)
+	answer, err := readTerminalLine()
+	if err != nil {
+		return false, err
+	}
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "":
+		return defaultValue, nil
+	case "y", "yes":
+		return true, nil
+	case "n", "no":
+		return false, nil
+	default:
+		return false, fmt.Errorf("enter y or n")
+	}
 }
 
 // handleSetAPIKey processes the set-key command.

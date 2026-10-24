@@ -20,6 +20,7 @@ func NewGeneratePRPreviewService(prUseCase *usecases.PullRequestUseCase) *Genera
 type GeneratePRPreviewRequest struct {
 	BaseBranch string
 	Model      string
+	Diff       *entities.GitDiff
 }
 
 type GeneratePRPreviewResponse struct {
@@ -42,6 +43,7 @@ func (s *GeneratePRPreviewService) GeneratePreview(request *GeneratePRPreviewReq
 	req := &usecases.GeneratePullRequestRequest{
 		BaseBranch: request.BaseBranch,
 		Model:      request.Model,
+		Diff:       request.Diff,
 	}
 
 	pr, err := s.prUseCase.GeneratePRPreview(req)
