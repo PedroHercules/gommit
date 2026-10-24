@@ -96,6 +96,7 @@ gmit commit                         # Generate, then choose push, commit, or can
 gmit commit --dry-run               # Generate and show; do not commit
 gmit commit --commit                # Generate and create one commit
 gmit commit --model provider/model-id # Use a specific configured-provider model
+gmit commit --commit --allow-sensitive # Legacy flag; the warning still appears
 ```
 
 Options:
@@ -103,6 +104,9 @@ Options:
 - `--model <id>` or `-m <id>` uses that model instead of the configured default.
 - `--commit` creates a commit with the generated message and exits without pushing. It requires staged changes.
 - `--dry-run` skips the Git commit. It still contacts the provider and may incur charges.
+- When the local security scan is enabled, Gmit checks the staged diff for likely credentials and sensitive files before sending it to a model. In a terminal, review the warning and choose **Continue once** or **Cancel**. The warning never prints detected values. The scan is off by default; see [Local sensitive-data warning](#local-sensitive-data-warning) to enable it.
+- After a security warning, continuing sends the full diff to the configured provider, then follows the normal commit preview and action selector. Without an interactive terminal, Gmit prints an enabled scan's warning and continues automatically.
+- `--allow-sensitive` remains accepted for compatibility, but it no longer hides or bypasses the warning.
 - The default post-generation selector is single-choice. **Commit and push** runs one commit, then pushes the current branch to `origin` with upstream tracking. If the push fails, the commit remains created and Gmit reports the push error.
 - `--force` is unsupported. Stage the intended changes and review the output instead.
 
@@ -114,6 +118,7 @@ Generates a Markdown pull request description from the code diff between your cu
 gmit pr
 gmit pr --base-branch develop
 gmit pr --base-branch main --model provider/model-id
+gmit pr --base-branch main --allow-sensitive
 gmit pr --create --reviewer alice --reviewer my-team --draft
 gmit pr --create --title "Add account recovery" --reviewer alice
 ```
@@ -133,6 +138,8 @@ When creating interactively, Gmit loads repository collaborators into a searchab
 
 If the current branch is not published at the same commit on `origin`, Gmit asks before running `git push --set-upstream origin <branch>`. In non-interactive use, publish the branch yourself and rerun the command. Gmit does not force-push. If `origin` or the named base branch is unavailable, it stops with an error instead of generating a description from incomplete data. It fetches from `origin`, but does not checkout branches or pull into your current branch.
 
+When the local security scan is enabled, Gmit checks the PR diff for likely credentials and sensitive files before sending it to a model. The terminal warning lets you continue once or cancel; it never prints detected values. After a warning, continuing generates the PR preview and returns to the normal create-or-preview actions. Without an interactive terminal, Gmit prints an enabled scan's warning and continues automatically. `--allow-sensitive` remains accepted for compatibility but does not hide or bypass the warning.
+
 ### `gmit validate <message>`
 
 Checks that a message is non-empty and reports whether it resembles Conventional Commits. It also gives heuristic warnings about summary length and imperative wording. This is a lightweight advisory check, not a complete validator or guarantee that a repository's commit policy will accept the message.
@@ -146,7 +153,7 @@ The command exits successfully for any non-empty message; style issues are repor
 
 ### `gmit config`
 
-Run `gmit config` in an interactive terminal to select a provider, set up authentication, and choose a default model.
+Run `gmit config` in an interactive terminal to select a provider, set up authentication, choose a default model, and decide whether to enable the security scan.
 
 ```sh
 gmit config
@@ -154,6 +161,9 @@ gmit config list-models
 gmit config set-model provider/model-id
 gmit config summary
 gmit config validate
+gmit security on
+gmit security off
+gmit security status
 gmit config get-model
 ```
 
@@ -184,6 +194,16 @@ Gmit sends prompts and diffs to the provider and model you select. OpenRouter an
 - xAI: [API pricing](https://docs.x.ai/developers/pricing) and [billing documentation](https://docs.x.ai/developers/faq/billing).
 
 `--dry-run` only skips creating a local Git commit. It does **not** skip model generation or provider billing. For lower cost, choose a model marked free when available and verify its current price in the provider's own catalog.
+
+## Local sensitive-data warning
+
+The local sensitive-data scan is **off by default**. Enable or disable it with `gmit security on` and `gmit security off`; run `gmit security status` to see whether it is on or off. The interactive `gmit config` setup also asks whether to enable it after authentication and model selection. On later setup runs, the current setting is the default answer.
+
+When enabled, before commit-message or PR-description generation, Gmit scans the exact diff it is about to send using local deterministic checks. It looks for sensitive assignments across common dotenv, source-code, JSON/YAML/TOML-like forms; recognized token formats; authentication headers; credentials in connection URLs; private-key markers; high-entropy assigned values; environment files; and common credential-file paths. It checks `.gitignore` coverage for local credential files. The scan does not use an LLM, an external scanner, or a network call, so it does not send data or incur provider charges.
+
+When findings appear in an interactive terminal, Gmit shows a scrollable warning with affected paths, finding types, and line numbers. It does not display detected values. **Continue once** sends the full diff to the configured provider and proceeds to the usual commit or PR preview and actions; **Cancel** stops before generation and leaves staged changes or repository state untouched. Without an interactive terminal, Gmit prints the warning and continues automatically. `--allow-sensitive` remains accepted for compatibility but does not suppress the warning when the scan is enabled.
+
+Please treat the scan as an extra precaution and review the diff before continuing. Automated checks can occasionally flag harmless content or miss sensitive values, so the scan does not replace your review. Remove any real credentials before continuing and add local secret files to `.gitignore` where appropriate. A matching ignore rule does not remove a file that is already staged or tracked.
 
 ## Availability and known limitations
 

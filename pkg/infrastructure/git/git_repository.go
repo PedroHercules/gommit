@@ -124,6 +124,21 @@ func (r *CommandGitRepository) HasWorkingChanges() (bool, error) {
 	return strings.TrimSpace(output) != "", nil
 }
 
+// IsIgnored checks whether a path matches the repository's ignore rules.
+// --no-index matters because callers often inspect paths that are already staged.
+func (r *CommandGitRepository) IsIgnored(path string) (bool, error) {
+	cmd := exec.Command("git", "check-ignore", "--no-index", "--quiet", "--", path)
+	cmd.Dir = r.workingDir
+	err := cmd.Run()
+	if err == nil {
+		return true, nil
+	}
+	if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to check Git ignore rules for %q: %w", path, err)
+}
+
 // GetCurrentBranch returns the name of the current branch.
 func (r *CommandGitRepository) GetCurrentBranch() (string, error) {
 	output, err := r.runGitCommand("branch", "--show-current")

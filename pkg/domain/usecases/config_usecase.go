@@ -151,6 +151,14 @@ func (uc *ConfigUseCase) SetActiveProvider(provider string) error {
 	return uc.configRepo.SaveActiveProvider(provider)
 }
 
+func (uc *ConfigUseCase) SecurityScanEnabled() (bool, error) {
+	return uc.configRepo.LoadSecurityScanEnabled()
+}
+
+func (uc *ConfigUseCase) SetSecurityScanEnabled(enabled bool) error {
+	return uc.configRepo.SaveSecurityScanEnabled(enabled)
+}
+
 func (uc *ConfigUseCase) GetProviderInfo() (string, string, error) {
 	provider, err := uc.configRepo.LoadActiveProvider()
 	if err != nil || provider == "" {

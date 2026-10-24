@@ -93,6 +93,126 @@ type prPreviewState struct {
 	cursor       int
 }
 
+type securityWarningState struct {
+	lines    []string
+	display  []string
+	scroll   int
+	viewport int
+	cursor   int
+}
+
+func reviewSecurityWarning(report securityReport) (bool, error) {
+	screen, err := tcell.NewScreen()
+	if err != nil {
+		return false, fmt.Errorf("could not open the security warning: %w", err)
+	}
+	if err := screen.Init(); err != nil {
+		return false, fmt.Errorf("could not open the security warning: %w", err)
+	}
+	defer screen.Fini()
+	screen.EnablePaste()
+	return reviewSecurityWarningOnScreen(screen, report)
+}
+
+func reviewSecurityWarningOnScreen(screen tcell.Screen, report securityReport) (bool, error) {
+	_, height := screen.Size()
+	if height < 7 {
+		return false, fmt.Errorf("terminal is too short to review the security warning; resize it to at least 7 rows")
+	}
+	state := securityWarningState{lines: []string{
+		"Possible credentials or secrets were found in the diff.",
+		"Nothing has been sent to your model provider yet.",
+	}, cursor: 1}
+	for _, finding := range report.findings {
+		state.lines = append(state.lines,
+			fmt.Sprintf("! %s  %s", finding.category, finding.file),
+			fmt.Sprintf("  %s", finding.detail),
+		)
+		if finding.ignoreStatus != "" {
+			state.lines = append(state.lines, "  Git ignore: "+finding.ignoreStatus)
+		}
+	}
+	state.lines = append(state.lines,
+		"Continuing sends the full diff to your configured model provider.",
+		"Continue once to generate a preview, or Cancel to stop before generation.",
+	)
+	state.render(screen)
+	for {
+		switch event := screen.PollEvent().(type) {
+		case *tcell.EventResize:
+			screen.Sync()
+			state.render(screen)
+		case *tcell.EventKey:
+			switch event.Key() {
+			case tcell.KeyEnter:
+				return state.cursor == 0, nil
+			case tcell.KeyEscape, tcell.KeyCtrlC:
+				return false, nil
+			case tcell.KeyLeft, tcell.KeyRight, tcell.KeyTab:
+				state.cursor = 1 - state.cursor
+			case tcell.KeyUp:
+				state.scrollBy(-1)
+			case tcell.KeyDown:
+				state.scrollBy(1)
+			case tcell.KeyPgUp:
+				state.scrollBy(-max(1, state.viewport-1))
+			case tcell.KeyPgDn:
+				state.scrollBy(max(1, state.viewport-1))
+			case tcell.KeyHome:
+				state.scroll = 0
+			case tcell.KeyEnd:
+				state.scroll = max(0, len(state.display)-state.viewport)
+			}
+			state.render(screen)
+		}
+	}
+}
+
+func (s *securityWarningState) scrollBy(amount int) {
+	s.scroll = min(max(0, len(s.display)-s.viewport), max(0, s.scroll+amount))
+}
+
+func (s *securityWarningState) render(screen tcell.Screen) {
+	width, height := screen.Size()
+	screen.Clear()
+	if width <= 0 || height <= 0 {
+		screen.Show()
+		return
+	}
+	base := tcell.StyleDefault
+	header := base.Foreground(tcell.ColorRed).Bold(true)
+	alert := base.Foreground(tcell.ColorYellow).Bold(true)
+	muted := base.Foreground(tcell.ColorGray)
+	s.display = wrapText(strings.Join(s.lines, "\n"), max(1, width-2))
+	s.viewport = max(1, height-5)
+	s.scroll = min(max(0, len(s.display)-s.viewport), max(0, s.scroll))
+	end := min(len(s.display), s.scroll+s.viewport)
+	count := fmt.Sprintf("⚠ Sensitive data review · lines %d-%d of %d", s.scroll+1, end, len(s.display))
+	putLine(screen, 0, 0, count, width, header)
+	for index, line := range s.display[s.scroll:end] {
+		style := base
+		if strings.HasPrefix(line, "!") {
+			style = alert
+		}
+		putLine(screen, 0, index+1, line, width, style)
+	}
+	actions := []string{"Continue once", "Cancel"}
+	selected := base.Foreground(tcell.ColorBlack).Background(tcell.ColorYellow).Bold(true)
+	for index, action := range actions {
+		style, label := base.Foreground(tcell.ColorYellow), "  "+action
+		if index == s.cursor {
+			style, label = selected, "> "+action
+		}
+		putLine(screen, 0, height-3+index, label, width, style)
+	}
+	controls := "↑/↓ scroll · PgUp/PgDn page · ←/→ actions · Enter select · Esc cancel"
+	if width < 68 {
+		controls = "↑↓/PgUp/Dn scroll · ←→ actions · Enter select · Esc cancel"
+	}
+	putLine(screen, 0, height-1, controls, width, muted)
+	screen.Show()
+}
+
 func reviewPRPreview(markdown string, defaultCreate bool) (string, error) {
 	screen, err := tcell.NewScreen()
 	if err != nil {

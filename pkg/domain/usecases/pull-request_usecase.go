@@ -18,6 +18,7 @@ type GeneratePullRequestRequest struct {
 	Model      string // Optional: specific model to use
 	Force      bool   // Whether to force generation even with warnings
 	BaseBranch string
+	Diff       *entities.GitDiff
 }
 
 type GeneratePrResponse struct {
@@ -45,17 +46,19 @@ func (uc *PullRequestUseCase) GeneratePRPreview(req *GeneratePullRequestRequest)
 		Warnings: []string{},
 	}
 
-	// Step 1: Fetch latest changes from remote
-	err := uc.gitRepo.FetchRemote()
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch origin; PR generation requires origin/%s: %w", req.BaseBranch, err)
-	}
-
-	// Compare against the fetched remote-tracking ref without checking out or pulling.
-	baseRef := "origin/" + req.BaseBranch
-	diff, err := uc.gitRepo.GetDiffBetweenBranches(baseRef, "HEAD")
-	if err != nil {
-		return nil, fmt.Errorf("failed to get diff: %w", err)
+	diff := req.Diff
+	if diff == nil {
+		// Step 1: Fetch latest changes from remote
+		err := uc.gitRepo.FetchRemote()
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch origin; PR generation requires origin/%s: %w", req.BaseBranch, err)
+		}
+		// Compare against the fetched remote-tracking ref without checking out or pulling.
+		baseRef := "origin/" + req.BaseBranch
+		diff, err = uc.gitRepo.GetDiffBetweenBranches(baseRef, "HEAD")
+		if err != nil {
+			return nil, fmt.Errorf("failed to get diff: %w", err)
+		}
 	}
 
 	// Step 4: Load configuration

@@ -56,11 +56,12 @@ func NewFileConfigRepository() (*FileConfigRepository, error) {
 
 // configFileData represents the structure of the configuration file.
 type configFileData struct {
-	ActiveProvider string            `json:"active_provider,omitempty"`
-	AuthMethods    map[string]string `json:"auth_methods,omitempty"`
-	DefaultModels  map[string]string `json:"default_models,omitempty"`
-	DefaultModel   string            `json:"default_model,omitempty"`
-	Version        string            `json:"version,omitempty"`
+	ActiveProvider      string            `json:"active_provider,omitempty"`
+	AuthMethods         map[string]string `json:"auth_methods,omitempty"`
+	DefaultModels       map[string]string `json:"default_models,omitempty"`
+	DefaultModel        string            `json:"default_model,omitempty"`
+	SecurityScanEnabled bool              `json:"security_scan_enabled,omitempty"`
+	Version             string            `json:"version,omitempty"`
 }
 
 // Save persists the configuration to the file system.
@@ -258,6 +259,27 @@ func (r *FileConfigRepository) DeleteProviderDefaultModel(provider string) error
 	if provider == "openrouter" {
 		data.DefaultModel = ""
 	}
+	return r.saveConfigFile(data)
+}
+
+// LoadSecurityScanEnabled returns whether the local sensitive-data scan is enabled.
+// Missing values in existing configurations default to false.
+func (r *FileConfigRepository) LoadSecurityScanEnabled() (bool, error) {
+	data, err := r.loadConfigFile()
+	if err != nil {
+		return false, err
+	}
+	return data.SecurityScanEnabled, nil
+}
+
+// SaveSecurityScanEnabled persists the local sensitive-data scan preference.
+func (r *FileConfigRepository) SaveSecurityScanEnabled(enabled bool) error {
+	data, err := r.loadConfigFile()
+	if err != nil {
+		return err
+	}
+	data.SecurityScanEnabled = enabled
+	data.Version = "2.0"
 	return r.saveConfigFile(data)
 }
 

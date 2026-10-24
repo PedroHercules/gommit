@@ -86,6 +86,27 @@ func TestBranchDiffErrorsWhenRemoteBaseIsUnavailable(t *testing.T) {
 	}
 }
 
+func TestIsIgnoredChecksRepositoryRules(t *testing.T) {
+	dir := t.TempDir()
+	mustRunGit(t, "", "init", "-b", "main", dir)
+	if err := os.WriteFile(filepath.Join(dir, ".gitignore"), []byte(".env\nsecrets/*.pem\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	repo, err := NewCommandGitRepository(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		path    string
+		ignored bool
+	}{{".env", true}, {"secrets/deploy.pem", true}, {"config.yaml", false}} {
+		got, err := repo.IsIgnored(tc.path)
+		if err != nil || got != tc.ignored {
+			t.Errorf("IsIgnored(%q) = %v, %v; want %v", tc.path, got, err, tc.ignored)
+		}
+	}
+}
+
 func mustRunGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	command := exec.Command("git", args...)

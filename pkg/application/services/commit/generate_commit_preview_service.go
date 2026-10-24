@@ -1,6 +1,9 @@
 package commit_services
 
-import "github.com/PedroHercules/gommit/pkg/domain/usecases"
+import (
+	"github.com/PedroHercules/gommit/pkg/domain/entities"
+	"github.com/PedroHercules/gommit/pkg/domain/usecases"
+)
 
 type generateCommitPreviewService struct {
 	generateCommitUseCase *usecases.GenerateCommitUseCase
@@ -10,6 +13,7 @@ type GenerateCommitPreviewDTO struct {
 	Model  string
 	DryRun bool
 	Force  bool
+	Diff   *entities.GitDiff
 }
 
 type GenerateCommitPreviewEntity struct {
@@ -36,6 +40,7 @@ func (commitService *generateCommitPreviewService) GenerateCommitPreview(data Ge
 	generateRequest := usecases.GenerateCommitRequest{
 		Model: data.Model,
 		Force: data.Force,
+		Diff:  data.Diff,
 	}
 
 	generateResponse, generateCommitErr := commitService.generateCommitUseCase.Execute(generateRequest)
