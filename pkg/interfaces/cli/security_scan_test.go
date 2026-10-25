@@ -135,8 +135,32 @@ func TestPlaceholdersAndBenignIdentifiersAvoidWarnings(t *testing.T) {
 	}
 }
 
+func TestGitHubWorkflowReferencesAndExpressionsAreNotSecrets(t *testing.T) {
+	checkoutSHA := strings.Join([]string{"3d3c42e5aac5ba805825", "da76410c181273ba90b1"}, "")
+	setupGoSHA := strings.Join([]string{"b7ad1dad31e06c5925ef", "5d2fc7ad053ef454303e"}, "")
+	setupNodeSHA := strings.Join([]string{"949feb2413d6458794dc", "d2491c4babbbce0c15c1"}, "")
+	workflow := strings.Join([]string{
+		"+      - uses: actions/checkout@" + checkoutSHA + " # v7.0.1",
+		"+      - uses: actions/setup-go@" + setupGoSHA + " # v7.0.0",
+		"+      - uses: actions/setup-node@" + setupNodeSHA + " # v7.1.0",
+		"+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
+	}, "\n") + "\n"
+	file := ".github/workflows/ci-cd.yml"
+	report := scanSensitiveDiff(diffFixture(file, workflow), []string{file})
+	if report.hasFindings() {
+		t.Fatalf("pinned GitHub Actions and a GitHub Actions secret reference triggered findings: %#v", report.findings)
+	}
+
+	knownToken := strings.Join([]string{"ghp_", "123456789012345678901234567890123456"}, "")
+	literalLine := "+          API_TOKEN: \"" + knownToken + "\"\n"
+	report = scanSensitiveDiff(diffFixture(file, literalLine), []string{file})
+	if !report.hasFindings() {
+		t.Fatal("a literal credential in a workflow should still be reported")
+	}
+}
+
 func TestPlaceholderRecognitionUsesBoundariesInsteadOfSubstringMatches(t *testing.T) {
-	for _, value := range []string{"", "example", "replace_me", "your-api-key-here", "${SERVICE_TOKEN}", "{{TOKEN}}", "<redacted>"} {
+	for _, value := range []string{"", "example", "replace_me", "your-api-key-here", "${SERVICE_TOKEN}", "{{TOKEN}}", "${{ secrets.GITHUB_TOKEN }}", "<redacted>"} {
 		if !isPlaceholder(value) {
 			t.Errorf("%q should be recognized as a placeholder", value)
 		}

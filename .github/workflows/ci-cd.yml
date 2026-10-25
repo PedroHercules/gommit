@@ -18,8 +18,8 @@ jobs:
     name: Test Go packages
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
@@ -34,20 +34,22 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
           cache: true
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
 
-      - name: Ensure npm CLI supports trusted publishing
+      - name: Use npm CLI with trusted publishing support
         run: |
-          npm install --global 'npm@^11.5.1'
+          npm install --global npm@11.21.1
           npm --version
 
       - name: Initialize the existing npm release tag if needed
@@ -74,10 +76,9 @@ jobs:
           fi
 
       - name: Install release tooling
-        run: npm install --no-save --package-lock=false semantic-release@25.0.9 @semantic-release/exec@7.1.0
+        run: npm ci
 
       - name: Release to npm and GitHub
         run: ./node_modules/.bin/semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
