@@ -20,15 +20,17 @@ var (
 	// assignmentPattern handles dotenv, JSON/YAML/TOML-like key/value pairs,
 	// and common quoted assignments in source code without depending on a
 	// provider-specific environment variable name.
-	assignmentPattern = regexp.MustCompile(`(?i)(?:^|[\s,{.\[])['"]?([a-z_][a-z0-9_.-]{0,80})['"]?(?:\s*:\s*[a-z_][a-z0-9_<>,\[\] |?]*)?\s*(?::=|=|:)\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|` + "`([^`]*)`" + `|([^\s"',;]+))`)
+	assignmentPattern = regexp.MustCompile(`(?i)(?:^|[\s,{.\[])['"]?([a-z_][a-z0-9_.-]{0,80})['"]?(?:\s*:\s*[a-z_][a-z0-9_<>,\[\] |?]*)?\s*(?::=|=|:)\s*(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)'|` + "`([^`]*)`" + `|(\$\{\{[^}]+\}\}|[^\s"',;]+))`)
 	knownTokenPattern = regexp.MustCompile(`(?i)\b(?:sk-or-v1-[a-z0-9_-]{12,}|xai-[a-z0-9_-]{12,}|sk-[a-z0-9_-]{20,}|AIza[0-9A-Za-z_-]{30,}|xox[baprs]-[0-9A-Za-z-]{10,}|gh[pousr]_[a-z0-9]{20,}|github_pat_[a-z0-9_]{20,}|AKIA[0-9A-Z]{16}|eyJ[a-zA-Z0-9_-]{8,}\.[a-zA-Z0-9_-]{8,}\.[a-zA-Z0-9_-]{8,})\b`)
 	privateKeyPattern = regexp.MustCompile(`-----BEGIN (?:RSA |EC |OPENSSH |DSA |ENCRYPTED )?PRIVATE KEY-----`)
 	credentialURL     = regexp.MustCompile(`(?i)\b[a-z][a-z0-9+.-]*://[^\s/:@]+:[^\s/@]+@`)
 	authHeader        = regexp.MustCompile(`(?i)\b(?:authorization|proxy-authorization)\s*[:=]\s*(?:bearer|basic)\s+[^\s,;]+`)
+	githubActionSHA   = regexp.MustCompile(`(?i)^\s*(?:-\s*)?uses:\s*[a-z0-9_.-]+/[a-z0-9_.-]+(?:/[a-z0-9_.-]+)*@[0-9a-f]{40}(?:\s+#.*)?\s*$`)
 	hunkPattern       = regexp.MustCompile(`^@@ -([0-9]+)(?:,[0-9]+)? \+([0-9]+)(?:,[0-9]+)? @@`)
 	placeholderExact  = regexp.MustCompile(`(?i)^(?:your(?:[-_ ](?:api[-_ ]?)?(?:key|secret|token|password))?|replace[-_ ]?me|change[-_ ]?me|example|sample|placeholder|dummy|redacted|none|null|todo|x{4,})(?:[-_ ](?:value|here|goes-here))?$`)
 	placeholderEnv    = regexp.MustCompile(`^\$\{[^}]+\}$`)
 	placeholderMust   = regexp.MustCompile(`^\{\{[^}]+\}\}$`)
+	placeholderExpr   = regexp.MustCompile(`^\$\{\{\s*[^{}]+\s*\}\}$`)
 	placeholderAngle  = regexp.MustCompile(`^<[^>]+>$`)
 )
 
@@ -119,6 +121,9 @@ func scanSensitiveDiff(diff string, files []string) securityReport {
 		if authHeader.MatchString(content) {
 			add(securityFinding{file: currentFile, category: "Authentication header", detail: lineDetail})
 		}
+		if isPinnedGitHubActionReference(currentFile, content) {
+			continue
+		}
 
 		for _, match := range assignmentPattern.FindAllStringSubmatch(content, -1) {
 			if len(match) < 6 {
@@ -200,6 +205,11 @@ func isPrivateCredentialFile(file string) bool {
 	return ext == ".pem" || ext == ".key" || ext == ".p12" || ext == ".pfx" || ext == ".jks" || ext == ".keystore" ||
 		base == "id_rsa" || base == "id_ed25519" || base == "credentials.json" || base == ".npmrc" || base == ".pypirc" ||
 		strings.HasSuffix(path, "/.docker/config.json")
+}
+
+func isPinnedGitHubActionReference(file, line string) bool {
+	path := strings.ToLower(filepath.ToSlash(file))
+	return (strings.HasPrefix(path, ".github/workflows/") || strings.Contains(path, "/.github/workflows/")) && githubActionSHA.MatchString(line)
 }
 
 func isSensitiveIdentifier(name string) bool {
@@ -340,7 +350,7 @@ func shannonEntropy(value string) float64 {
 
 func isPlaceholder(value string) bool {
 	v := strings.TrimSpace(strings.Trim(value, `"'`))
-	if v == "" || placeholderEnv.MatchString(v) || placeholderMust.MatchString(v) || placeholderAngle.MatchString(v) {
+	if v == "" || placeholderEnv.MatchString(v) || placeholderMust.MatchString(v) || placeholderExpr.MatchString(v) || placeholderAngle.MatchString(v) {
 		return true
 	}
 	return placeholderExact.MatchString(v)
