@@ -75,7 +75,8 @@ QUICK NOTES
     › Select staged and unstaged files before generating a commit.
     › Space stages or unstages; Enter continues. Esc keeps current staging.
     › --all stages all changes; without a terminal, existing staging is used.
-    › Review the full preview, then choose Commit and push, Commit only, or Cancel.
+    › Review the preview, then commit, push, cancel, or edit staged files.
+    › Changing staged files generates a new message and may incur provider charges.
     › --dry-run still sends a provider request and may incur charges.
     › The local sensitive-data scan is off by default. Run gmit security on to enable it.
     › When enabled, it checks diffs locally for likely credentials and sensitive files.

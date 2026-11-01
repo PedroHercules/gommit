@@ -25,6 +25,7 @@ type CLI struct {
 	configService            *config_services.ConfigService
 	prService                prPreviewCommandService
 	selectCommitAction       func() (string, error)
+	selectStaging            func(repositories.StagingRepository) (bool, error)
 	selectPRDraft            func() (bool, error)
 	selectPRReviewers        func([]string, []string) (reviewerPickerResult, error)
 	reviewSensitive          func(securityReport) (bool, error)
@@ -55,6 +56,7 @@ const (
 	commitAndPushAction = "1. Commit and push"
 	commitOnlyAction    = "2. Commit only"
 	cancelCommitAction  = "3. Cancel"
+	editStagingAction   = "4. Edit staged files"
 	createPRAction      = "Create pull request"
 	previewOnlyAction   = "Keep preview only"
 )
@@ -172,7 +174,7 @@ func (c *CLI) handleCommit(args []string) error {
 				return fmt.Errorf("could not stage all changes: %w", err)
 			}
 		} else if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
-			proceed, err := pickStaging(staging)
+			proceed, err := c.pickStaging(staging)
 			if err != nil {
 				return err
 			}
@@ -184,88 +186,132 @@ func (c *CLI) handleCommit(args []string) error {
 	} else if all {
 		return fmt.Errorf("Git staging is unavailable")
 	}
-	var diff *entities.GitDiff
-	if c.securityGit != nil {
-		diff, err = c.securityGit.GetStagedDiff()
-		if err != nil {
-			return fmt.Errorf("failed to inspect staged changes: %w", err)
-		}
-		if diff == nil {
-			return fmt.Errorf("failed to inspect staged changes: Git returned no diff")
-		}
-		enabled, enabledErr := c.isSecurityScanEnabled()
-		if enabledErr != nil {
-			return fmt.Errorf("could not read security scan setting: %w", enabledErr)
-		}
-		if enabled {
-			if report := scanSensitiveDiff(diff.Content, diff.Files); report.hasFindings() {
-				annotateIgnoreStatus(&report, c.securityGit)
-				if err := c.handleSecurityReport(report, allowSensitive); err != nil {
-					return err
+generate:
+	for {
+		var diff *entities.GitDiff
+		if c.securityGit != nil {
+			diff, err = c.securityGit.GetStagedDiff()
+			if err != nil {
+				return fmt.Errorf("failed to inspect staged changes: %w", err)
+			}
+			if diff == nil {
+				return fmt.Errorf("failed to inspect staged changes: Git returned no diff")
+			}
+			enabled, enabledErr := c.isSecurityScanEnabled()
+			if enabledErr != nil {
+				return fmt.Errorf("could not read security scan setting: %w", enabledErr)
+			}
+			if enabled {
+				if report := scanSensitiveDiff(diff.Content, diff.Files); report.hasFindings() {
+					annotateIgnoreStatus(&report, c.securityGit)
+					if err := c.handleSecurityReport(report, allowSensitive); err != nil {
+						return err
+					}
+				}
+				current, checkErr := c.securityGit.GetStagedDiff()
+				if checkErr != nil {
+					return fmt.Errorf("failed to verify staged changes after security review: %w", checkErr)
+				}
+				if current == nil || current.Content != diff.Content {
+					return fmt.Errorf("staged changes changed after security review; rerun gmit commit to inspect the current diff")
 				}
 			}
-			current, checkErr := c.securityGit.GetStagedDiff()
-			if checkErr != nil {
-				return fmt.Errorf("failed to verify staged changes after security review: %w", checkErr)
+		}
+		req := commit_services.GenerateCommitPreviewDTO{Model: model, DryRun: dryRun, Diff: diff}
+
+		var resp *commit_services.GenerateCommitPreviewEntity
+		err = withSpinner("Drafting commit message", func() error {
+			var callErr error
+			resp, callErr = c.commitService.GenerateCommitPreview(req)
+			if callErr != nil {
+				return fmt.Errorf("failed to generate commit: %w", callErr)
 			}
-			if current == nil || current.Content != diff.Content {
-				return fmt.Errorf("staged changes changed after security review; rerun gmit commit to inspect the current diff")
+			if !resp.Success {
+				return fmt.Errorf("commit generation failed: %s", resp.ErrorMessage)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("\nCommit preview\n%s\n\n", resp.CommitMessage)
+		fmt.Printf("Changes  %s\n", resp.ChangesSummary)
+		fmt.Printf("Model    %s\n", resp.Model)
+		fmt.Printf("Tokens   %d\n", resp.TokensUsed)
+
+		if len(resp.Warnings) > 0 {
+			fmt.Println("\n! Review these notes:")
+			for _, warning := range resp.Warnings {
+				fmt.Printf("  - %s\n", warning)
+			}
+		}
+
+		if dryRun {
+			fmt.Println("\n✓ Preview complete; no changes were committed.")
+			return nil
+		}
+
+		if autoCommit {
+			return c.commitGeneratedMessage(resp.CommitMessage, false, diff)
+		}
+		for {
+			action, err := c.chooseCommitAction(resp.CommitMessage)
+			if err != nil {
+				return err
+			}
+			switch action {
+			case commitAndPushAction:
+				return c.commitGeneratedMessage(resp.CommitMessage, true, diff)
+			case commitOnlyAction:
+				return c.commitGeneratedMessage(resp.CommitMessage, false, diff)
+			case cancelCommitAction, "":
+				fmt.Println("\n› Commit cancelled. Your changes are still staged.")
+				return nil
+			case editStagingAction:
+				staging, ok := c.securityGit.(repositories.StagingRepository)
+				if !ok {
+					return fmt.Errorf("Git staging is unavailable")
+				}
+				for {
+					proceed, pickErr := c.pickStaging(staging)
+					if pickErr != nil {
+						return pickErr
+					}
+					current, checkErr := c.securityGit.GetStagedDiff()
+					if checkErr != nil {
+						return fmt.Errorf("failed to inspect staged changes: %w", checkErr)
+					}
+					if current == nil {
+						return fmt.Errorf("failed to inspect staged changes: Git returned no diff")
+					}
+					if !current.HasChanges() {
+						if !proceed {
+							fmt.Println("› Commit cancelled. No changes are staged.")
+							return nil
+						}
+						fmt.Println("› No changes are staged. Select files to continue, or cancel.")
+						continue
+					}
+					if diff != nil && current.Content == diff.Content {
+						break
+					}
+					resp = nil
+					fmt.Println("› Staged changes updated. Generating a new commit message.")
+					continue generate
+				}
+			default:
+				return fmt.Errorf("unknown commit action %q", action)
 			}
 		}
 	}
-	req := commit_services.GenerateCommitPreviewDTO{Model: model, DryRun: dryRun, Diff: diff}
+}
 
-	var resp *commit_services.GenerateCommitPreviewEntity
-	err = withSpinner("Drafting commit message", func() error {
-		var callErr error
-		resp, callErr = c.commitService.GenerateCommitPreview(req)
-		if callErr != nil {
-			return fmt.Errorf("failed to generate commit: %w", callErr)
-		}
-		if !resp.Success {
-			return fmt.Errorf("commit generation failed: %s", resp.ErrorMessage)
-		}
-		return nil
-	})
-	if err != nil {
-		return err
+func (c *CLI) pickStaging(staging repositories.StagingRepository) (bool, error) {
+	if c.selectStaging != nil {
+		return c.selectStaging(staging)
 	}
-
-	fmt.Printf("\nCommit preview\n%s\n\n", resp.CommitMessage)
-	fmt.Printf("Changes  %s\n", resp.ChangesSummary)
-	fmt.Printf("Model    %s\n", resp.Model)
-	fmt.Printf("Tokens   %d\n", resp.TokensUsed)
-
-	if len(resp.Warnings) > 0 {
-		fmt.Println("\n! Review these notes:")
-		for _, warning := range resp.Warnings {
-			fmt.Printf("  - %s\n", warning)
-		}
-	}
-
-	if dryRun {
-		fmt.Println("\n✓ Preview complete; no changes were committed.")
-		return nil
-	}
-
-	if autoCommit {
-		return c.commitGeneratedMessage(resp.CommitMessage, false, diff)
-	}
-	action, err := c.chooseCommitAction(resp.CommitMessage)
-	if err != nil {
-		return err
-	}
-	switch action {
-	case commitAndPushAction:
-		return c.commitGeneratedMessage(resp.CommitMessage, true, diff)
-	case commitOnlyAction:
-		return c.commitGeneratedMessage(resp.CommitMessage, false, diff)
-	case cancelCommitAction, "":
-		fmt.Println("\n› Commit cancelled. Your changes are still staged.")
-		return nil
-	default:
-		return fmt.Errorf("unknown commit action %q", action)
-	}
+	return pickStaging(staging)
 }
 
 func (c *CLI) handleAdd(args []string) error {
@@ -368,6 +414,7 @@ func (c *CLI) chooseCommitAction(message string) (string, error) {
 		commitAndPushAction,
 		commitOnlyAction,
 		cancelCommitAction,
+		editStagingAction,
 	})
 }
 
