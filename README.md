@@ -80,7 +80,7 @@ After setup, run `gmit` to select files to stage or unstage, then generate a mes
 gmit --dry-run
 ```
 
-`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. By default, after generation a single-choice selector displays the generated message above **Commit and push**, **Commit only**, and **Cancel**. Use Page Up/Page Down to scroll long messages, the arrow keys to select one action, and Enter to confirm. A push sends the current branch to `origin` and sets its upstream. To create a commit automatically without the selector or push, use `gmit commit --commit`.
+`--dry-run` prevents a Git commit, but Gmit still sends a model request. Provider charges may apply. By default, after generation a single-choice selector displays the generated message above **Commit and push**, **Commit only**, **Cancel**, and **Edit staged files**. Use Page Up/Page Down to scroll long messages, the arrow keys to select one action, and Enter to confirm. A push sends the current branch to `origin` and sets its upstream. To create a commit automatically without the selector or push, use `gmit commit --commit`.
 
 ## Commands
 
@@ -110,7 +110,7 @@ Options:
 - When the local security scan is enabled, Gmit checks the staged diff for likely credentials and sensitive files before sending it to a model. In a terminal, review the warning and choose **Continue once** or **Cancel**. The warning never prints detected values. The scan is off by default; see [Local sensitive-data warning](#local-sensitive-data-warning) to enable it.
 - After a security warning, continuing sends the full diff to the configured provider, then follows the normal commit preview and action selector. Without an interactive terminal, Gmit prints an enabled scan's warning and continues automatically.
 - `--allow-sensitive` remains accepted for compatibility, but it no longer hides or bypasses the warning.
-- The default post-generation selector is single-choice. **Commit and push** runs one commit, then pushes the current branch to `origin` with upstream tracking. If the push fails, the commit remains created and Gmit reports the push error.
+- The default post-generation selector is single-choice. **Commit and push** runs one commit, then pushes the current branch to `origin` with upstream tracking. If the push fails, the commit remains created and Gmit reports the push error. **Edit staged files** returns to file selection; the message is reused when the staged diff is unchanged. A changed diff runs the enabled security scan again and generates a new message, which may incur additional provider charges.
 - `--force` is unsupported. Stage the intended changes and review the output instead.
 
 ### `gmit pr`
