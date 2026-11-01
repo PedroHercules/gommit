@@ -12,7 +12,8 @@ USAGE
     gmit [command] [options]
 
 COMMANDS
-    commit              Generate a message from staged changes (default)
+    commit              Select files and generate a commit message (default)
+    add                 Select files to stage or unstage
     pr                  Generate a pull request description
     validate <message>  Check a commit message
     config              Configure a provider, credentials, and model
@@ -23,7 +24,8 @@ COMMANDS
 
 COMMIT OPTIONS
     --model, -m <id>    Use a model from the configured provider
-    --commit            Create one Git commit without showing the selector
+    --all               Stage all changes and skip file selection
+    --commit            Create one Git commit without the action selector
     --dry-run           Generate and display a message without committing
     --allow-sensitive   Legacy flag; scan warnings still require review when enabled
 
@@ -56,6 +58,8 @@ SECURITY SCAN
 
 EXAMPLES
     gmit
+    gmit add
+    gmit --all
     gmit config
     gmit config list-models
     gmit security status
@@ -68,8 +72,11 @@ EXAMPLES
     gmit update
 
 QUICK NOTES
-    › Commit generation uses staged changes only. Stage files with git add first.
-    › Review the full preview, then choose Commit and push, Commit only, or Cancel.
+    › Select staged and unstaged files before generating a commit.
+    › Space stages or unstages; Enter continues. Esc keeps current staging.
+    › --all stages all changes; without a terminal, existing staging is used.
+    › Review the preview, then commit, push, cancel, or edit staged files.
+    › Changing staged files generates a new message and may incur provider charges.
     › --dry-run still sends a provider request and may incur charges.
     › The local sensitive-data scan is off by default. Run gmit security on to enable it.
     › When enabled, it checks diffs locally for likely credentials and sensitive files.
