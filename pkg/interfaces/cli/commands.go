@@ -89,6 +89,8 @@ func (c *CLI) Run(args []string) error {
 		return c.showHelp()
 	case "commit":
 		return c.handleCommit(args[2:])
+	case "add":
+		return c.handleAdd(args[2:])
 	case "config":
 		return c.handleConfig(args[2:])
 	case "security":
@@ -144,7 +146,16 @@ func (c *CLI) handleUpdate(notice updateNotice) error {
 
 // handleCommit processes commit-related commands.
 func (c *CLI) handleCommit(args []string) error {
-	model, dryRun, autoCommit, allowSensitive, err := parseCommitArgs(args)
+	all := false
+	filteredArgs := make([]string, 0, len(args))
+	for _, arg := range args {
+		if arg == "--all" {
+			all = true
+		} else {
+			filteredArgs = append(filteredArgs, arg)
+		}
+	}
+	model, dryRun, autoCommit, allowSensitive, err := parseCommitArgs(filteredArgs)
 	if err != nil {
 		return err
 	}
@@ -154,6 +165,24 @@ func (c *CLI) handleCommit(args []string) error {
 	if !dryRun && !autoCommit && c.selectCommitAction == nil &&
 		(!term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd()))) {
 		return fmt.Errorf("an interactive terminal is required to choose a commit action; use --commit to commit without pushing or --dry-run to preview")
+	}
+	if staging, ok := c.securityGit.(repositories.StagingRepository); ok {
+		if all {
+			if err := staging.StageAll(); err != nil {
+				return fmt.Errorf("could not stage all changes: %w", err)
+			}
+		} else if term.IsTerminal(int(os.Stdin.Fd())) && term.IsTerminal(int(os.Stdout.Fd())) {
+			proceed, err := pickStaging(staging)
+			if err != nil {
+				return err
+			}
+			if !proceed {
+				fmt.Println("› File selection cancelled. Current staging was kept.")
+				return nil
+			}
+		}
+	} else if all {
+		return fmt.Errorf("Git staging is unavailable")
 	}
 	var diff *entities.GitDiff
 	if c.securityGit != nil {
@@ -237,6 +266,29 @@ func (c *CLI) handleCommit(args []string) error {
 	default:
 		return fmt.Errorf("unknown commit action %q", action)
 	}
+}
+
+func (c *CLI) handleAdd(args []string) error {
+	if len(args) != 0 {
+		return fmt.Errorf("unsupported add argument %q; run `gmit help`", args[0])
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !term.IsTerminal(int(os.Stdout.Fd())) {
+		return fmt.Errorf("gmit add requires an interactive terminal")
+	}
+	staging, ok := c.securityGit.(repositories.StagingRepository)
+	if !ok {
+		return fmt.Errorf("Git staging is unavailable")
+	}
+	proceed, err := pickStaging(staging)
+	if err != nil {
+		return err
+	}
+	if proceed {
+		fmt.Println("✓ File staging updated.")
+	} else {
+		fmt.Println("› File selection cancelled. Current staging was kept.")
+	}
+	return nil
 }
 
 func parseCommitArgs(args []string) (model string, dryRun, autoCommit, allowSensitive bool, err error) {

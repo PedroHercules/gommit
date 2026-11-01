@@ -74,10 +74,9 @@ gmit config validate
 
 Run `gmit config validate` after setup to check that Gmit can read your credentials and fetch the provider's model catalog before you generate a message.
 
-After setup, stage the changes you want Gmit to analyze. Running `gmit` by itself is an alias for `gmit commit`:
+After setup, run `gmit` to select files to stage or unstage, then generate a message. Running `gmit` by itself is an alias for `gmit commit`:
 
 ```sh
-git add src/file.go
 gmit --dry-run
 ```
 
@@ -87,10 +86,13 @@ gmit --dry-run
 
 ### `gmit commit`
 
-Generates a commit message from the **staged diff only**. Unstaged changes are not included. Stage the exact files you intend to include before running the command.
+In an interactive terminal, select files to stage or unstage before generating a commit message from the **staged diff**. The selector shows staged and unstaged changes separately: use the arrow keys to navigate, Space to stage or unstage, and Enter to continue. **Stage all changes** appears at the top. Each change to staging is applied immediately; Esc cancels the flow and keeps the current staging. A file with both staged and unstaged changes appears in both lists. Staging its unstaged changes stages the whole file; unstaging removes its staged changes while keeping its working file.
+
+Use `gmit add` to open the same selector without generating a message or creating a commit. It requires an interactive terminal. Without a terminal, commit generation uses the existing staging unless `--all` is supplied.
 
 ```sh
-git add src/auth.go
+gmit add                            # Stage or unstage files interactively
+gmit --all                          # Stage all changes, then generate a message
 gmit                                 # Same as gmit commit
 gmit commit                         # Generate, then choose push, commit, or cancel
 gmit commit --dry-run               # Generate and show; do not commit
@@ -101,9 +103,10 @@ gmit commit --commit --allow-sensitive # Legacy flag; the warning still appears
 
 Options:
 
+- `--all` stages all eligible changes across the repository with `git add -A` and skips file selection. This includes untracked files that are not ignored.
 - `--model <id>` or `-m <id>` uses that model instead of the configured default.
 - `--commit` creates a commit with the generated message and exits without pushing. It requires staged changes.
-- `--dry-run` skips the Git commit. It still contacts the provider and may incur charges.
+- `--dry-run` skips the Git commit. The selector and `--all` can still change staging; the command contacts the provider and may incur charges.
 - When the local security scan is enabled, Gmit checks the staged diff for likely credentials and sensitive files before sending it to a model. In a terminal, review the warning and choose **Continue once** or **Cancel**. The warning never prints detected values. The scan is off by default; see [Local sensitive-data warning](#local-sensitive-data-warning) to enable it.
 - After a security warning, continuing sends the full diff to the configured provider, then follows the normal commit preview and action selector. Without an interactive terminal, Gmit prints an enabled scan's warning and continues automatically.
 - `--allow-sensitive` remains accepted for compatibility, but it no longer hides or bypasses the warning.
