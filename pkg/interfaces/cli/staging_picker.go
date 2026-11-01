@@ -16,7 +16,7 @@ type stagingRow struct {
 }
 
 func stagingRows(files []repositories.FileStatus) []stagingRow {
-	rows := []stagingRow{{label: "[+] Stage all changes", action: "all"}, {label: "── Staged ──"}}
+	rows := []stagingRow{{label: "[+] Stage all changes", action: "all"}, {label: "── Staged ──", action: "staged-header"}}
 	for _, file := range files {
 		if file.Index != ' ' && file.Index != '?' {
 			name := displayPath(file.Path)
@@ -92,6 +92,9 @@ func pickStagingOnScreen(screen tcell.Screen, repo repositories.StagingRepositor
 		putLine(screen, 0, 2, "Changes apply immediately; cancel keeps the current staging.", width, base.Foreground(tcell.ColorGray))
 		for i := scroll; i < len(rows) && i < scroll+viewport; i++ {
 			style, prefix := base, "  "
+			if rows[i].action == "unstage" || rows[i].action == "staged-header" {
+				style = base.Foreground(tcell.ColorGreen)
+			}
 			if i == cursor {
 				style, prefix = base.Reverse(true), "> "
 			}
