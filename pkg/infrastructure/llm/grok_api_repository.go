@@ -58,14 +58,14 @@ type xAIResponsesResponse struct {
 }
 
 func (r *GrokAPIRepository) GenerateCommitMessage(diff *entities.GitDiff, model string) (*repositories.LLMResponse, error) {
-	return r.generate(model, (&OpenRouterRepository{}).createCommitPrompt(diff), (&OpenRouterRepository{}).cleanCommitMessage)
+	return r.generate(model, (&OpenRouterRepository{}).createCommitPrompt(diff), (&OpenRouterRepository{}).cleanCommitMessage, validateCommitOutput)
 }
 
 func (r *GrokAPIRepository) GeneratePRDescription(diff *entities.GitDiff, model string) (*repositories.LLMResponse, error) {
-	return r.generate(model, (&OpenRouterRepository{}).createPRPrompt(diff), (&OpenRouterRepository{}).cleanPRDescription)
+	return r.generate(model, (&OpenRouterRepository{}).createPRPrompt(diff), (&OpenRouterRepository{}).cleanPRDescription, validatePROutput)
 }
 
-func (r *GrokAPIRepository) generate(model, prompt string, clean func(string) string) (*repositories.LLMResponse, error) {
+func (r *GrokAPIRepository) generate(model, prompt string, clean func(string) string, validate func(string) error) (*repositories.LLMResponse, error) {
 	if strings.TrimSpace(r.apiKey) == "" {
 		return nil, errors.New("xAI API key is not configured")
 	}
@@ -118,6 +118,9 @@ func (r *GrokAPIRepository) generate(model, prompt string, clean func(string) st
 	message := clean(content.String())
 	if message == "" {
 		return failedLLMResponse(fmt.Errorf("xAI returned no text (status %q)", result.Status)), nil
+	}
+	if err := validate(message); err != nil {
+		return failedLLMResponse(err), nil
 	}
 	usedModel := result.Model
 	if usedModel == "" {

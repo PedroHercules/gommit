@@ -36,14 +36,14 @@ func (r *GrokCLIRepository) ConfigureProvider(provider, authMethod string) error
 }
 
 func (r *GrokCLIRepository) GenerateCommitMessage(diff *entities.GitDiff, model string) (*repositories.LLMResponse, error) {
-	return r.generate(model, (&OpenRouterRepository{}).createCommitPrompt(diff), (&OpenRouterRepository{}).cleanCommitMessage)
+	return r.generate(model, (&OpenRouterRepository{}).createCommitPrompt(diff), (&OpenRouterRepository{}).cleanCommitMessage, validateCommitOutput)
 }
 
 func (r *GrokCLIRepository) GeneratePRDescription(diff *entities.GitDiff, model string) (*repositories.LLMResponse, error) {
-	return r.generate(model, (&OpenRouterRepository{}).createPRPrompt(diff), (&OpenRouterRepository{}).cleanPRDescription)
+	return r.generate(model, (&OpenRouterRepository{}).createPRPrompt(diff), (&OpenRouterRepository{}).cleanPRDescription, validatePROutput)
 }
 
-func (r *GrokCLIRepository) generate(model, prompt string, clean func(string) string) (*repositories.LLMResponse, error) {
+func (r *GrokCLIRepository) generate(model, prompt string, clean func(string) string, validate func(string) error) (*repositories.LLMResponse, error) {
 	if strings.TrimSpace(model) == "" {
 		return failedLLMResponse(errors.New("Grok model is not configured; run `gmit config` to select one")), nil
 	}
@@ -78,6 +78,9 @@ func (r *GrokCLIRepository) generate(model, prompt string, clean func(string) st
 	message := clean(text)
 	if message == "" {
 		return failedLLMResponse(errors.New("Grok CLI returned an empty response")), nil
+	}
+	if err := validate(message); err != nil {
+		return failedLLMResponse(err), nil
 	}
 	return &repositories.LLMResponse{Message: message, Model: model, Success: true}, nil
 }
